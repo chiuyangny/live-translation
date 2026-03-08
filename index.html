@@ -85,7 +85,6 @@
   #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
   #translation-box { width: 100%; max-width: 1200px; text-align: center; }
   #translation-lines { display: flex; flex-direction: column; gap: 32px; margin-bottom: 12px; }
-
   .tline {
     font-size: clamp(24px, 4vw, 60px);
     line-height: 1.5;
@@ -95,8 +94,6 @@
   .tline.newest { color: #ffffff; }
   .tline.older  { color: #ffffff; }
   .tline.oldest { color: #666666; }
-
-  /* Streaming line — same white as newest, no color flash */
   #streaming-line {
     font-size: clamp(24px, 4vw, 60px);
     line-height: 1.5;
@@ -106,7 +103,6 @@
     transition: opacity 0.3s;
   }
   #streaming-line.empty { opacity: 0; }
-
   #streaming-cursor {
     display: inline-block;
     width: 3px;
@@ -117,7 +113,6 @@
     animation: blink 0.7s infinite;
   }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-
   #interim-text {
     font-size: clamp(13px, 1.6vw, 20px);
     color: #444;
@@ -197,64 +192,73 @@ var db = firebase.database();
 var translationsRef = db.ref('translations');
 var isOperator = window.location.search.includes('operator');
 
-var rec = null;
-var isListening = false;
-var translateTimer = null;    // fires quick translation after final speech
-var lockTimer = null;         // fires to lock+revise after silence
-var rollingTimer = null;
-var pending = '';             // untranslated Korean accumulating
-var isTranslating = false;
-var historyLog = [];
-var currentStreamText = '';
-var streamAbortCtrl = null;
-
-// Revision window: Korean fragments + their live English translations
-// that are candidates for consolidation into one clean sentence
-var revisionWindow = [];      // [{ko, en}]  — last few final chunks
-var revisionLineEl = null;    // the DOM element currently being revised
-
-var LOCK_SILENCE_MS = 4000;   // ms of silence before we lock & revise
-
 function $(id) { return document.getElementById(id); }
 
-// ---- Viewer mode ----
+// =============================================
+// VIEWER MODE
+// Simple and bulletproof — seenKeys prevents
+// any duplicate regardless of listener timing.
+// Revision is purely a visual operator-side effect;
+// viewers only ever receive final pushed lines.
+// =============================================
 if (!isOperator) {
   document.addEventListener('DOMContentLoaded', function() {
     $('controls').style.display = 'none';
     $('error-box').style.display = 'none';
     $('streaming-line').style.display = 'none';
     $('interim-text').style.display = 'none';
+    $('debug-badge').style.display = 'none';
 
-    var childListener = null;
     var seenKeys = new Set();
 
-    function displayIfNew(snap) {
-      if (seenKeys.has(snap.key)) return;
-      seenKeys.add(snap.key);
-      var it = snap.val();
-      if (it && it.text) displayFinalLine(it.text, null, true);
-    }
-
-    function startListeningForTranslations() {
-      if (childListener) { translationsRef.off('child_added', childListener); childListener = null; }
-      translationsRef.limitToLast(10).once('value', function(snap) {
-        snap.forEach(function(child) { displayIfNew(child); });
-        childListener = function(s) { displayIfNew(s); };
-        translationsRef.on('child_added', childListener);
+    // Load last 10 on arrival, mark all as seen
+    translationsRef.limitToLast(10).once('value', function(snap) {
+      snap.forEach(function(child) {
+        seenKeys.add(child.key);
+        var it = child.val();
+        if (it && it.text) displayFinalLine(it.text, null, true);
       });
-    }
-    startListeningForTranslations();
+
+      // Now attach child_added — seenKeys blocks history re-firing
+      translationsRef.on('child_added', function(snap) {
+        if (seenKeys.has(snap.key)) return;
+        seenKeys.add(snap.key);
+        var it = snap.val();
+        if (it && it.text) displayFinalLine(it.text, null, true);
+      });
+    });
+
+    // Watch for board clear
     translationsRef.on('value', function(snap) {
       if (!snap.val()) {
         $('translation-lines').innerHTML = '';
         $('placeholder').style.display = 'block';
         seenKeys.clear();
-        startListeningForTranslations();
       }
     });
   });
 }
 
+// =============================================
+// OPERATOR MODE STATE
+// =============================================
+var rec = null;
+var isListening = false;
+var translateTimer = null;
+var lockTimer = null;
+var rollingTimer = null;
+var pending = '';
+var isTranslating = false;
+var historyLog = [];
+var currentStreamText = '';
+var streamAbortCtrl = null;
+var revisionWindow = [];   // [{ko, en}]
+var revisionLineEl = null;
+var LOCK_SILENCE_MS = 4000;
+
+// =============================================
+// SHARED UI HELPERS
+// =============================================
 function showError(msg) { $('error-box').style.display='block'; $('error-box').textContent=msg; setStatus('Error','error'); }
 function clearError() { $('error-box').style.display='none'; }
 function setStatus(msg, cls) { $('status').textContent=msg; $('status').className=cls||''; }
@@ -275,25 +279,22 @@ function reclassLines() {
   all.forEach(function(el, i) {
     el.classList.remove('newest','older','oldest');
     var fromBottom = total - 1 - i;
-    if (fromBottom <= 1) el.classList.add(fromBottom === 0 ? 'newest' : 'older');
+    if (fromBottom === 0) el.classList.add('newest');
+    else if (fromBottom === 1) el.classList.add('older');
     else el.classList.add('oldest');
   });
 }
 
-// Display a final (locked) line.
-// If reuseEl is provided, update that element in place (for revision).
-// skipFirebase = true when replaying from Firebase (viewer mode).
+// displayFinalLine: adds a line to the DOM.
+// reuseEl: if provided, updates that element in place (operator revision only).
+// skipFirebase: true in viewer mode and for operator in-place revisions.
 function displayFinalLine(text, reuseEl, skipFirebase) {
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
 
   if (reuseEl && linesEl.contains(reuseEl)) {
-    // Revise in place — update text, brief flash to signal update
     reuseEl.style.opacity = '0.4';
-    setTimeout(function() {
-      reuseEl.textContent = text;
-      reuseEl.style.opacity = '1';
-    }, 180);
+    setTimeout(function() { reuseEl.textContent = text; reuseEl.style.opacity = '1'; }, 180);
     return reuseEl;
   }
 
@@ -319,22 +320,15 @@ function displayFinalLine(text, reuseEl, skipFirebase) {
 }
 
 function setStreamingText(text) {
-  var el = $('streaming-line');
-  var t  = $('streaming-text');
-  var cur= $('streaming-cursor');
+  var el = $('streaming-line'), t = $('streaming-text'), cur = $('streaming-cursor');
   if (!text) {
-    el.classList.add('empty');
-    t.textContent = '';
-    cur.style.display = 'none';
+    el.classList.add('empty'); t.textContent = ''; cur.style.display = 'none';
   } else {
     $('placeholder').style.display = 'none';
-    el.classList.remove('empty');
-    t.textContent = text;
-    cur.style.display = 'inline-block';
+    el.classList.remove('empty'); t.textContent = text; cur.style.display = 'inline-block';
   }
 }
 
-// Move streaming line into the locked stack, return the new DOM element
 function lockStreamingLine(text) {
   setStreamingText('');
   if (!text || !text.trim()) return null;
@@ -351,27 +345,27 @@ function clearTranslations() {
 }
 
 // =============================================
-// REVISION: called after LOCK_SILENCE_MS silence
-// Takes the last N Korean fragments + their quick
-// translations and asks Claude for one clean sentence.
+// REVISION
+// Operator-side only. Merges partial chunks into
+// one clean sentence. Only pushes ONE entry to
+// Firebase (the revised final), never deletes.
+// Viewers only ever see this one clean push.
 // =============================================
 async function reviseLastChunks() {
-  if (revisionWindow.length < 2) {
-    // Only one chunk — nothing to merge, just clear window
-    revisionWindow = [];
-    revisionLineEl = null;
-    return;
-  }
+  if (revisionWindow.length < 2) { revisionWindow = []; revisionLineEl = null; return; }
 
-  var koText  = revisionWindow.map(function(c){ return c.ko; }).join(' ');
-  var enDraft = revisionWindow.map(function(c){ return c.en; }).join(' ');
-  var targetEl = revisionLineEl; // the DOM line to update in place
+  var koText  = revisionWindow.map(function(c) { return c.ko; }).join(' ');
+  var enDraft = revisionWindow.map(function(c) { return c.en; }).join(' ');
+  var targetEl = revisionLineEl;
 
   var sermonContext = $('sermonContext').value.trim();
   var sermonLine = sermonContext ? 'Sermon topic: ' + sermonContext + '\n\n' : '';
   var contextStr = historyLog.length
-    ? 'Prior sentences:\n' + historyLog.slice(-2).map(function(h){ return h.en; }).join('\n') + '\n\n'
+    ? 'Prior sentences:\n' + historyLog.slice(-2).map(function(h) { return h.en; }).join('\n') + '\n\n'
     : '';
+
+  revisionWindow = [];
+  revisionLineEl = null;
 
   try {
     var res = await fetch(WORKER_URL, {
@@ -381,57 +375,43 @@ async function reviseLastChunks() {
         model: 'claude-sonnet-4-20250514',
         max_tokens: 120,
         stream: false,
-        system: 'You are a live interpreter for a Christian worship service. You are given Korean text that was spoken with pauses, and a rough draft English translation of the fragments. Produce ONE clean, natural, complete English sentence that best captures the full meaning. Korean verbs come last — the meaning often only becomes clear at the end. The speech recognition may have misheard words — use context to infer the correct word (e.g. "ish cream" or "ice creman" likely means "ice cream"). Respond with ONLY the final English sentence, nothing else.',
+        system: 'You are a live interpreter for a Christian worship service. You are given Korean text spoken with pauses and a rough draft English translation. Produce ONE clean, natural, complete English sentence capturing the full meaning. Korean verbs come last — meaning often only becomes clear at the end. Speech recognition may mishear words — use context to infer correctly. Respond with ONLY the final English sentence, nothing else.',
         messages: [{
           role: 'user',
           content: sermonLine + contextStr +
-            'Korean (full utterance): ' + koText + '\n' +
-            'Draft translation: ' + enDraft + '\n\n' +
+            'Korean: ' + koText + '\n' +
+            'Draft: ' + enDraft + '\n\n' +
             'Final translation:'
         }]
       })
     });
 
-    if (!res.ok) { revisionWindow = []; revisionLineEl = null; return; }
+    if (!res.ok) return;
     var data = await res.json();
     var revised = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
-    if (!revised) { revisionWindow = []; revisionLineEl = null; return; }
+    if (!revised) return;
 
-    // Update the DOM line in place
-    if (targetEl && $('translation-lines').contains(targetEl)) {
-      // Remove all lines added during this revision window except the first one
-      var linesEl = $('translation-lines');
-      var allLines = linesEl.querySelectorAll('.tline');
-      var targetIdx = Array.prototype.indexOf.call(allLines, targetEl);
-      // Remove lines after targetEl that were part of this window
+    // 1. Update operator DOM: collapse partial lines into one revised line
+    var linesEl = $('translation-lines');
+    if (targetEl && linesEl.contains(targetEl)) {
+      var allLines = Array.prototype.slice.call(linesEl.querySelectorAll('.tline'));
+      var targetIdx = allLines.indexOf(targetEl);
+      // Remove any lines after the first chunk's line (the partial ones)
       for (var i = allLines.length - 1; i > targetIdx; i--) {
         linesEl.removeChild(allLines[i]);
       }
       reclassLines();
-      displayFinalLine(revised, targetEl, true);
+      displayFinalLine(revised, targetEl, true); // update in place, no Firebase
     }
 
-    // Update Firebase with revised text (remove old entries and push revised)
-    // We use a simple approach: push the revision as the canonical version
-    translationsRef.limitToLast(revisionWindow.length + 1).once('value', function(snap) {
-      var data2 = snap.val();
-      if (data2) {
-        // Remove the partial entries and replace with revised
-        var keys = Object.keys(data2);
-        keys.slice(-revisionWindow.length).forEach(function(k) {
-          translationsRef.child(k).remove();
-        });
-      }
-      translationsRef.push({ text: revised, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    });
+    // 2. Push ONE clean revised line to Firebase for viewers
+    // (partial chunk lines were never pushed to Firebase — see triggerTranslation)
+    translationsRef.push({ text: revised, timestamp: firebase.database.ServerValue.TIMESTAMP });
 
     historyLog.push({ en: revised });
     if (historyLog.length > 6) historyLog.shift();
 
-  } catch(e) { /* silently fail — keep whatever was displayed */ }
-
-  revisionWindow = [];
-  revisionLineEl = null;
+  } catch(e) { /* silently keep whatever is displayed */ }
 }
 
 // =============================================
@@ -443,7 +423,6 @@ function startListening() {
   clearError();
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showError('Please use Google Chrome.'); return; }
-
   rec = new SR();
   rec.lang = 'ko-KR';
   rec.continuous = true;
@@ -456,7 +435,7 @@ function startListening() {
     $('mic-indicator').classList.add('active');
     setStatus('🎤 Listening…', 'listening');
     rollingTimer = setInterval(function() {
-      if (pending.trim() && !isTranslating) triggerTranslation(pending.trim(), false);
+      if (pending.trim() && !isTranslating) triggerTranslation(pending.trim());
     }, 2500);
   };
 
@@ -472,11 +451,9 @@ function startListening() {
       $('interim-text').textContent = '';
       pending += ' ' + final.trim();
       clearTimeout(translateTimer);
-      // Translate quickly after each final result
       translateTimer = setTimeout(function() {
-        if (pending.trim() && !isTranslating) triggerTranslation(pending.trim(), false);
+        if (pending.trim() && !isTranslating) triggerTranslation(pending.trim());
       }, 350);
-      // Reset the lock/revise timer on every new speech
       resetLockTimer();
     }
   };
@@ -487,9 +464,7 @@ function startListening() {
   };
 
   rec.onend = function() {
-    if (isListening) setTimeout(function() {
-      if (isListening) { try { rec.start(); } catch(ex) {} }
-    }, 200);
+    if (isListening) setTimeout(function() { try { rec.start(); } catch(ex) {} }, 200);
   };
 
   rec.start();
@@ -508,15 +483,12 @@ function stopListening() {
   setStatus('Stopped');
 }
 
-// After silence, lock current streaming output and trigger revision
 function resetLockTimer() {
   clearTimeout(lockTimer);
   lockTimer = setTimeout(function() {
-    // Silence detected — lock whatever is streaming and revise
     if (currentStreamText.trim()) {
       var lockedEl = lockStreamingLine(currentStreamText);
-      if (lockedEl && revisionWindow.length > 0) {
-        // Add this final chunk to the revision window
+      if (revisionWindow.length > 0) {
         revisionWindow[revisionWindow.length - 1].en = currentStreamText.trim();
         if (!revisionLineEl) revisionLineEl = lockedEl;
       }
@@ -529,19 +501,20 @@ function resetLockTimer() {
 
 // =============================================
 // STREAMING TRANSLATION
+// KEY DESIGN: partial chunks are shown on the
+// operator screen but NOT pushed to Firebase.
+// Only the final revised sentence gets pushed.
+// This is what keeps the viewer clean.
 // =============================================
-// Remove repeated words/phrases from stutter (e.g. "저는 저는 저는" → "저는")
 function deStutter(text) {
-  // Split into tokens, collapse runs of identical adjacent tokens
-  var tokens = text.trim().split(/\s+/);
-  var out = [];
+  var tokens = text.trim().split(/\s+/), out = [];
   for (var i = 0; i < tokens.length; i++) {
-    if (i === 0 || tokens[i] !== tokens[i - 1]) out.push(tokens[i]);
+    if (i === 0 || tokens[i] !== tokens[i-1]) out.push(tokens[i]);
   }
   return out.join(' ');
 }
 
-async function triggerTranslation(text, isRevision) {
+async function triggerTranslation(text) {
   if (isTranslating) return;
   isTranslating = true;
   var koChunk = deStutter(pending.trim());
@@ -553,7 +526,7 @@ async function triggerTranslation(text, isRevision) {
   var sermonContext = $('sermonContext').value.trim();
   var sermonLine = sermonContext ? 'Sermon topic: ' + sermonContext + '\n\n' : '';
   var contextStr = historyLog.length
-    ? 'Recent:\n' + historyLog.slice(-2).map(function(h){ return 'EN: ' + h.en; }).join('\n') + '\n\n'
+    ? 'Recent:\n' + historyLog.slice(-2).map(function(h) { return 'EN: ' + h.en; }).join('\n') + '\n\n'
     : '';
 
   if (streamAbortCtrl) streamAbortCtrl.abort();
@@ -568,22 +541,19 @@ async function triggerTranslation(text, isRevision) {
         model: 'claude-sonnet-4-20250514',
         max_tokens: 150,
         stream: true,
-        system: 'You are a live interpreter for a Christian worship service. Translate Korean into natural, reverent English. Korean often omits subjects — infer from context. Keep any English words as-is. The speaker may stutter or restart phrases — translate only the intended meaning, ignoring false starts. Respond with ONLY the English translation, no quotes or explanation.',
+        system: 'You are a live interpreter for a Christian worship service. Translate Korean into natural, reverent English. Korean often omits subjects — infer from context. Keep any English words as-is. The speaker may stutter or restart phrases — translate only the intended meaning. Respond with ONLY the English translation, no quotes or explanation.',
         messages: [{ role: 'user', content: sermonLine + contextStr + 'Translate:\n' + text }]
       })
     });
 
     if (!res.ok) {
       var errData = await res.json();
-      var msg = errData && errData.error && errData.error.message ? errData.error.message : 'HTTP ' + res.status;
-      showError('API error: ' + msg);
+      showError('API error: ' + (errData && errData.error ? errData.error.message : 'HTTP ' + res.status));
       isTranslating = false;
       return;
     }
 
-    var reader = res.body.getReader();
-    var decoder = new TextDecoder();
-    var buf = '';
+    var reader = res.body.getReader(), decoder = new TextDecoder(), buf = '';
 
     while (true) {
       var chunk = await reader.read();
@@ -595,48 +565,47 @@ async function triggerTranslation(text, isRevision) {
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i].trim();
         if (!line || line === 'event: ping') continue;
-        if (line.startsWith('data: ')) {
-          var rawData = line.slice(6);
-          if (rawData === '[DONE]') continue;
-          try {
-            var parsed = JSON.parse(rawData);
-            if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.type === 'text_delta') {
-              currentStreamText += parsed.delta.text;
-              setStreamingText(currentStreamText);
-            }
-            if (parsed.type === 'message_stop') {
-              // Quick translation done — add to revision window, DON'T lock yet
-              // Locking happens after LOCK_SILENCE_MS of no new speech
-              revisionWindow.push({ ko: koChunk, en: currentStreamText.trim() });
-              var dbg = document.getElementById('debug-badge');
-              if (dbg) dbg.textContent = 'window: ' + revisionWindow.length + ' chunks | lock in ' + (LOCK_SILENCE_MS/1000) + 's';
-              if (revisionWindow.length === 1) {
-                // First chunk: lock immediately to screen so user sees something
-                var el = lockStreamingLine(currentStreamText);
-                revisionLineEl = el;
-              } else {
-                // Subsequent chunks: show as new line, will be merged on revision
-                var el2 = lockStreamingLine(currentStreamText);
-                if (!revisionLineEl) revisionLineEl = el2;
-              }
-              currentStreamText = '';
-              setStatus('🎤 Listening…', 'listening');
-              isTranslating = false;
-              if (pending.trim()) triggerTranslation(pending.trim(), false);
-            }
-          } catch(ex) {}
-        }
+        if (!line.startsWith('data: ')) continue;
+        var rawData = line.slice(6);
+        if (rawData === '[DONE]') continue;
+        try {
+          var parsed = JSON.parse(rawData);
+          if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.type === 'text_delta') {
+            currentStreamText += parsed.delta.text;
+            setStreamingText(currentStreamText);
+          }
+          if (parsed.type === 'message_stop') {
+            var chunkText = currentStreamText.trim();
+            currentStreamText = '';
+
+            // Add to revision window
+            revisionWindow.push({ ko: koChunk, en: chunkText });
+            var dbg = $('debug-badge');
+            if (dbg) dbg.textContent = 'window: ' + revisionWindow.length + ' chunks | lock in ' + (LOCK_SILENCE_MS/1000) + 's';
+
+            // Show on operator screen immediately (skipFirebase=true — viewer gets
+            // the clean revised version later, not these partials)
+            var lineEl = lockStreamingLine(chunkText);
+            if (!revisionLineEl) revisionLineEl = lineEl;
+
+            setStatus('🎤 Listening…', 'listening');
+            isTranslating = false;
+            if (pending.trim()) triggerTranslation(pending.trim());
+          }
+        } catch(ex) {}
       }
     }
 
+    // Fallback if stream ends without message_stop
     if (isTranslating && currentStreamText.trim()) {
-      revisionWindow.push({ ko: koChunk, en: currentStreamText.trim() });
-      var el3 = lockStreamingLine(currentStreamText);
-      if (!revisionLineEl) revisionLineEl = el3;
+      var chunkText2 = currentStreamText.trim();
       currentStreamText = '';
+      revisionWindow.push({ ko: koChunk, en: chunkText2 });
+      var lineEl2 = lockStreamingLine(chunkText2);
+      if (!revisionLineEl) revisionLineEl = lineEl2;
       setStatus('🎤 Listening…', 'listening');
       isTranslating = false;
-      if (pending.trim()) triggerTranslation(pending.trim(), false);
+      if (pending.trim()) triggerTranslation(pending.trim());
     }
 
   } catch(err) {
