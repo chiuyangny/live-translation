@@ -7,145 +7,57 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #0a0a0a;
-    color: #f0f0f0;
-    font-family: 'Georgia', serif;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  #controls {
-    background: #111;
-    border-bottom: 1px solid #222;
-    padding: 12px 20px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-  }
-  input[type="text"] {
-    background: #1e1e1e;
-    border: 1px solid #333;
-    border-radius: 6px;
-    color: #f0f0f0;
-    padding: 6px 10px;
-    font-size: 13px;
-    width: 260px;
-  }
-  button {
-    border: none;
-    border-radius: 6px;
-    padding: 7px 18px;
-    font-size: 13px;
-    cursor: pointer;
-    font-weight: 600;
-  }
-  #startBtn { background: #2ecc71; color: #000; }
-  #startBtn.active { background: #e74c3c; color: #fff; }
-  #fullscreenBtn { background: #333; color: #ccc; margin-left: auto; }
-  #status { font-size: 12px; color: #666; min-width: 160px; }
-  #status.listening { color: #2ecc71; }
-  #status.translating { color: #f39c12; }
-  #status.error { color: #e74c3c; }
-  #error-box {
-    display: none;
-    background: #1a0000;
-    border: 1px solid #500;
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 12px;
-    color: #ff6b6b;
-    margin: 6px 20px;
-    font-family: monospace;
-    word-break: break-all;
-    flex-shrink: 0;
-  }
-  #display {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    padding: 40px 60px;
-    position: relative;
-    overflow: hidden;
-  }
-  #placeholder {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    color: #2a2a2a;
-    pointer-events: none;
-  }
-  #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
-  #placeholder p { font-size: 16px; margin-top: 12px; color: #1e1e1e; }
-  #translation-box { width: 100%; max-width: 1200px; text-align: center; }
-  #translation-lines { display: flex; flex-direction: column; gap: 32px; margin-bottom: 12px; }
-  .tline {
-    font-size: clamp(24px, 4vw, 60px);
-    line-height: 1.5;
-    text-shadow: 0 2px 20px rgba(0,0,0,0.8);
-    transition: color 0.5s, opacity 0.5s;
-  }
-  .tline.newest { color: #ffffff; }
-  .tline.older  { color: #777777; }
-  .tline.oldest { color: #3a3a3a; }
-  #interim-text {
-    font-size: clamp(13px, 1.6vw, 20px);
-    color: #444;
-    margin-top: 18px;
-    font-style: italic;
-    min-height: 1.4em;
-    font-family: sans-serif;
-  }
-  #mic-indicator {
-    position: fixed;
-    bottom: 24px; right: 28px;
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    background: #333;
-  }
-  #mic-indicator.active {
-    background: #2ecc71;
-    box-shadow: 0 0 10px #2ecc71;
-    animation: pulse 1.5s infinite;
-  }
-  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #f0f0f0; font-family: Georgia, serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+#controls { background: #111; border-bottom: 1px solid #222; padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
+input[type="text"] { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; color: #f0f0f0; padding: 6px 10px; font-size: 13px; width: 260px; }
+button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; font-weight: 600; }
+#startBtn { background: #2ecc71; color: #000; }
+#startBtn.active { background: #e74c3c; color: #fff; }
+#clearBtn { background: #555; color: #ccc; }
+#fullscreenBtn { background: #333; color: #ccc; margin-left: auto; }
+#status { font-size: 12px; color: #666; min-width: 160px; }
+#status.listening { color: #2ecc71; }
+#status.translating { color: #f39c12; }
+#status.error { color: #e74c3c; }
+#error-box { display: none; background: #1a0000; border: 1px solid #500; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #ff6b6b; margin: 6px 20px; font-family: monospace; word-break: break-all; flex-shrink: 0; }
+#display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 40px 60px; position: relative; overflow: hidden; }
+#placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
+#placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
+#translation-box { width: 100%; max-width: 1200px; text-align: center; }
+#translation-lines { display: flex; flex-direction: column; gap: 32px; margin-bottom: 32px; }
+.tline { font-size: clamp(24px,4vw,60px); line-height: 1.5; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.5s; }
+.tline.newest { color: #fff; }
+.tline.older { color: #777; }
+.tline.oldest { color: #3a3a3a; }
+#live-line { font-size: clamp(24px,4vw,60px); line-height: 1.5; color: #fff; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.5em; transition: opacity 0.2s; }
+#live-line.updating { opacity: 0.6; }
+#mic-dot { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; }
+#mic-dot.active { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
 </style>
 </head>
 <body>
-
 <div id="controls">
   <label style="font-size:13px;color:#888;">Sermon topic:</label>
-  <input type="text" id="sermonContext" placeholder="e.g. John 3:16, faith, grace" />
-  <button id="startBtn" onclick="toggleListening()">▶ Start</button>
-  <button id="clearBtn" onclick="clearTranslations()" style="background:#555;color:#ccc;">⌫ Clear</button>
+  <input type="text" id="ctx" placeholder="e.g. John 3:16, faith, grace" />
+  <button id="startBtn" onclick="toggleListen()">Start</button>
+  <button id="clearBtn" onclick="clearAll()">Clear</button>
   <span id="status">Ready</span>
-  <button id="fullscreenBtn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+  <button id="fullscreenBtn" onclick="toggleFS()">Fullscreen</button>
 </div>
 <div id="error-box"></div>
-
 <div id="display">
-  <div id="placeholder">
-    <h1>CHIU YANG CHURCH</h1>
-
-  </div>
+  <div id="placeholder"><h1>CHIU YANG CHURCH</h1></div>
   <div id="translation-box">
     <div id="translation-lines"></div>
-    <div id="interim-text"></div>
+    <div id="live-line"></div>
   </div>
 </div>
-<div id="mic-indicator"></div>
-
+<div id="mic-dot"></div>
 <script>
-// ===== CONFIG =====
-var WORKER_URL = 'https://live-translation.pauljkim22.workers.dev';
-var firebaseConfig = {
+var WORKER = 'https://live-translation.pauljkim22.workers.dev';
+var FB = {
   apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
   authDomain: "live-translation-fd583.firebaseapp.com",
   databaseURL: "https://live-translation-fd583-default-rtdb.firebaseio.com",
@@ -154,263 +66,184 @@ var firebaseConfig = {
   messagingSenderId: "189364035896",
   appId: "1:189364035896:web:552700e29449859089a1cd"
 };
-// ==================
-
-firebase.initializeApp(firebaseConfig);
+firebase.initializeApp(FB);
 var db = firebase.database();
-var translationsRef = db.ref('translations');
-var isOperator = window.location.search.includes('operator');
+var txRef = db.ref('translations');
+var liveRef = db.ref('liveLine');
+var isOp = location.search.includes('operator');
 
-var rec = null;
-var isListening = false;
-var translateTimer = null;
-var rollingTimer = null;
-var pending = '';
-var isTranslating = false;
-var historyLog = [];
+var rec=null, listening=false, finalTxt='', interimTxt='', timer=null, busy=false, history=[];
 
-function $(id) { return document.getElementById(id); }
+function g(id){return document.getElementById(id);}
+function err(msg){g('error-box').style.display='block';g('error-box').textContent=msg;stat('Error','error');}
+function clearErr(){g('error-box').style.display='none';}
+function stat(msg,cls){g('status').textContent=msg;g('status').className=cls||'';}
 
-// Viewer mode — no controls, just display
-if (!isOperator) {
-  document.addEventListener('DOMContentLoaded', function() {
-    $('controls').style.display = 'none';
-    $('error-box').style.display = 'none';
+function toggleFS(){
+  if(!document.fullscreenElement){document.documentElement.requestFullscreen();g('controls').style.display='none';}
+  else{document.exitFullscreen();g('controls').style.display='flex';}
+}
 
-    var childListener = null;
-
-    function startListeningForTranslations() {
-      // Remove previous listener if any
-      if (childListener) {
-        translationsRef.off('child_added', childListener);
-        childListener = null;
-      }
-
-      translationsRef.limitToLast(10).once('value', function(snapshot) {
-        var data = snapshot.val();
-        var lastKey = null;
-        if (data) {
-          lastKey = Object.keys(data).pop();
-          Object.values(data).forEach(function(item) {
-            if (item && item.text) displayTranslation(item.text);
-          });
-        }
-        childListener = function(snap) {
-          var item = snap.val();
-          if (item && item.text) displayTranslation(item.text);
-        };
-        translationsRef.orderByKey().startAfter(lastKey || '0').on('child_added', childListener);
-      });
-    }
-
-    startListeningForTranslations();
-
-    // Watch for clear
-    translationsRef.on('value', function(snap) {
-      if (!snap.val()) {
-        $('translation-lines').innerHTML = '';
-        $('placeholder').style.display = 'block';
-        startListeningForTranslations();
-      }
-    });
+function reclass(){
+  var all=g('translation-lines').querySelectorAll('.tline');
+  all.forEach(function(e,i){
+    e.classList.remove('newest','older','oldest');
+    var f=all.length-1-i;
+    if(f===0)e.classList.add('newest');
+    else if(f===1)e.classList.add('older');
+    else e.classList.add('oldest');
   });
 }
 
-function showError(msg) {
-  $('error-box').style.display = 'block';
-  $('error-box').textContent = msg;
-  setStatus('Error', 'error');
-}
-function clearError() { $('error-box').style.display = 'none'; }
-function setStatus(msg, cls) {
-  $('status').textContent = msg;
-  $('status').className = cls || '';
+function trim(){
+  var el=g('translation-lines');
+  var max=g('display').clientHeight-120;
+  while(el.scrollHeight>max&&el.children.length>1){el.removeChild(el.firstChild);reclass();}
 }
 
-function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen();
-    $('controls').style.display = 'none';
-  } else {
-    document.exitFullscreen();
-    $('controls').style.display = 'flex';
-  }
+function lockLine(){
+  var text=g('live-line').textContent.trim();
+  if(!text)return;
+  var div=document.createElement('div');
+  div.className='tline newest';
+  div.textContent=text;
+  g('translation-lines').appendChild(div);
+  reclass();trim();
+  g('live-line').textContent='';
+  liveRef.set('');
+  txRef.push({text:text,ts:firebase.database.ServerValue.TIMESTAMP});
+  history.push(text);
+  if(history.length>6)history.shift();
+  finalTxt='';interimTxt='';
 }
 
-function reclassLines() {
-  var all = $('translation-lines').querySelectorAll('.tline');
-  all.forEach(function(el, i) {
-    el.classList.remove('newest', 'older', 'oldest');
-    var fromBottom = all.length - 1 - i;
-    if (fromBottom === 0) el.classList.add('newest');
-    else if (fromBottom === 1) el.classList.add('older');
-    else el.classList.add('oldest');
-  });
+function setLive(text,isFinal){
+  var el=g('live-line');
+  el.classList.add('updating');
+  setTimeout(function(){el.textContent=text;el.classList.remove('updating');g('placeholder').style.display='none';},100);
+  liveRef.set(text);
+  if(isFinal)setTimeout(lockLine,1500);
 }
 
-function displayTranslation(text) {
-  $('placeholder').style.display = 'none';
-  var linesEl = $('translation-lines');
-  var displayEl = $('display');
-  var div = document.createElement('div');
-  div.className = 'tline newest';
-  div.textContent = text;
-  div.style.opacity = '0';
-  linesEl.appendChild(div);
-  requestAnimationFrame(function() {
-    requestAnimationFrame(function() { div.style.opacity = '1'; });
-  });
-  reclassLines();
-  requestAnimationFrame(function() {
-    var maxHeight = displayEl.clientHeight - 80;
-    while (linesEl.scrollHeight > maxHeight && linesEl.children.length > 1) {
-      linesEl.removeChild(linesEl.firstChild);
-      reclassLines();
-    }
-  });
+function translate(text,isFinal){
+  if(!text.trim()||busy)return;
+  busy=true;
+  stat('Translating...','translating');
+  var ctx=g('ctx').value.trim();
+  var sys='You are a live interpreter for a Christian worship service. Translate Korean into natural, reverent English. Korean grammar is reverse of English so meaning may shift as more words arrive. Translate what you have so far even if incomplete. Keep English words as-is. Output ONLY the English translation.';
+  var prompt=(ctx?'Sermon topic: '+ctx+'\n\n':'')+(history.length?'Previous:\n'+history.slice(-2).join('\n')+'\n\n':'')+'Korean:\n'+text;
+  fetch(WORKER,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:isFinal?'claude-sonnet-4-20250514':'claude-haiku-4-5-20251001',
+      max_tokens:150,
+      system:sys,
+      messages:[{role:'user',content:prompt}]
+    })
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var t=d&&d.content&&d.content[0]?d.content[0].text.trim():null;
+    if(t){setLive(t,isFinal);stat('Listening...','listening');}
+    else{err('No translation returned');}
+  })
+  .catch(function(e){err('Error: '+e.message);})
+  .finally(function(){busy=false;});
 }
 
-function clearTranslations() {
-  translationsRef.remove();
-  $('translation-lines').innerHTML = '';
-  $('placeholder').style.display = 'block';
+function clearAll(){
+  txRef.remove();liveRef.set('');
+  g('translation-lines').innerHTML='';
+  g('live-line').textContent='';
+  g('placeholder').style.display='block';
+  finalTxt='';interimTxt='';history=[];
 }
 
-function toggleListening() {
-  if (isListening) stopListening();
-  else startListening();
+function toggleListen(){
+  if(listening)stopListen();else startListen();
 }
 
-function startListening() {
-  clearError();
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { showError('Please use Google Chrome.'); return; }
-
-  rec = new SR();
-  rec.lang = 'ko-KR';
-  rec.continuous = true;
-  rec.interimResults = true;
-
-  rec.onstart = function() {
-    isListening = true;
-    $('startBtn').textContent = '■ Stop';
-    $('startBtn').classList.add('active');
-    $('mic-indicator').classList.add('active');
-    setStatus('🎤 Listening…', 'listening');
-    $('placeholder').style.display = 'none';
-    rollingTimer = setInterval(function() {
-      if (pending.trim() && !isTranslating) translateText(pending.trim());
-    }, 2000);
+function startListen(){
+  clearErr();
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){err('Please use Google Chrome.');return;}
+  rec=new SR();rec.lang='ko-KR';rec.continuous=true;rec.interimResults=true;
+  rec.onstart=function(){
+    listening=true;
+    g('startBtn').textContent='Stop';g('startBtn').classList.add('active');
+    g('mic-dot').classList.add('active');
+    stat('Listening...','listening');
+    g('placeholder').style.display='none';
   };
-
-  rec.onresult = function(e) {
-    var interim = '', final = '';
-    for (var i = e.resultIndex; i < e.results.length; i++) {
-      var t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) final += t;
-      else interim += t;
+  rec.onresult=function(e){
+    var interim='',fin='';
+    for(var i=e.resultIndex;i<e.results.length;i++){
+      var t=e.results[i][0].transcript;
+      if(e.results[i].isFinal)fin+=t;else interim+=t;
     }
-    if (interim) $('interim-text').textContent = '"' + interim + '"';
-    if (final) {
-      $('interim-text').textContent = '';
-      pending += ' ' + final.trim();
-      clearTimeout(translateTimer);
-      translateTimer = setTimeout(function() {
-        if (pending.trim() && !isTranslating) translateText(pending.trim());
-      }, 400);
+    if(fin){
+      finalTxt+=' '+fin.trim();interimTxt='';
+      clearTimeout(timer);
+      translate(finalTxt.trim(),true);
+    } else if(interim){
+      interimTxt=interim;
+      clearTimeout(timer);
+      timer=setTimeout(function(){translate((finalTxt+' '+interimTxt).trim(),false);},800);
     }
   };
-
-  rec.onerror = function(e) {
-    if (e.error === 'no-speech' || e.error === 'aborted') return;
-    if (e.error === 'not-allowed') { showError('Microphone access denied.'); stopListening(); }
+  rec.onerror=function(e){
+    if(e.error==='no-speech'||e.error==='aborted')return;
+    if(e.error==='not-allowed'){err('Microphone denied.');stopListen();}
   };
-
-  rec.onend = function() {
-    if (isListening) setTimeout(function() {
-      if (isListening) { try { rec.start(); } catch(e) {} }
-    }, 200);
-  };
-
+  rec.onend=function(){if(listening)setTimeout(function(){if(listening){try{rec.start();}catch(e){}}},200);};
   rec.start();
 }
 
-function stopListening() {
-  isListening = false;
-  if (rec) { try { rec.stop(); } catch(e) {} rec = null; }
-  if (rollingTimer) { clearInterval(rollingTimer); rollingTimer = null; }
-  clearTimeout(translateTimer);
-  $('startBtn').textContent = '▶ Start';
-  $('startBtn').classList.remove('active');
-  $('mic-indicator').classList.remove('active');
-  $('interim-text').textContent = '';
-  setStatus('Stopped');
+function stopListen(){
+  listening=false;
+  if(rec){try{rec.stop();}catch(e){}rec=null;}
+  clearTimeout(timer);
+  g('startBtn').textContent='Start';g('startBtn').classList.remove('active');
+  g('mic-dot').classList.remove('active');
+  stat('Stopped');
+  if(g('live-line').textContent.trim())lockLine();
 }
 
-function translateText(text, retryCount) {
-  retryCount = retryCount || 0;
-  if (isTranslating) return;
-  isTranslating = true;
-  pending = '';
-  setStatus('Translating…', 'translating');
-  clearError();
-
-  var sermonContext = $('sermonContext').value.trim();
-  var sermonLine = sermonContext ? 'Sermon topic: ' + sermonContext + '\n\n' : '';
-  var contextStr = historyLog.length
-    ? 'Recent:\n' + historyLog.slice(-2).reverse().map(function(h, i) {
-        return i + ': KO: ' + h.ko + ' | EN: ' + h.en;
-      }).join('\n') + '\n\n'
-    : '';
-
-  fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 150,
-      system: 'You are a live interpreter for a Christian worship service. Translate Korean into natural, reverent English. Korean often omits subjects — infer from context. Keep any English words as-is.\n\nRespond ONLY in this JSON format:\n{"translation":"english text","corrections":[{"index":0,"text":"corrected line"}]}\n\nOnly include corrections when a subject/pronoun was clearly wrong. Return ONLY valid JSON.',
-      messages: [{ role: 'user', content: sermonLine + contextStr + 'Translate:\n' + text }]
-    })
-  })
-  .then(function(res) {
-    if (!res.ok) {
-      return res.json().then(function(err) {
-        var msg = err && err.error && err.error.message ? err.error.message : 'HTTP ' + res.status;
-        if (res.status === 529 || msg.toLowerCase().includes('overload')) {
-          if (retryCount < 3) {
-            setStatus('Server busy, retrying…', 'translating');
-            setTimeout(function() { isTranslating = false; translateText(text, retryCount + 1); }, 2000 * (retryCount + 1));
-          } else {
-            showError('Server overloaded. Try again shortly.');
-          }
-        } else {
-          showError('API error: ' + msg);
+if(!isOp){
+  document.addEventListener('DOMContentLoaded',function(){
+    g('controls').style.display='none';
+    g('error-box').style.display='none';
+    var cl=null;
+    function listenTx(){
+      if(cl){txRef.off('child_added',cl);cl=null;}
+      txRef.limitToLast(10).once('value',function(snap){
+        var data=snap.val(),lastKey=null;
+        if(data){
+          lastKey=Object.keys(data).pop();
+          Object.values(data).forEach(function(item){if(item&&item.text)addLine(item.text);});
         }
+        cl=function(s){var i=s.val();if(i&&i.text)addLine(i.text);};
+        txRef.orderByKey().startAfter(lastKey||'0').on('child_added',cl);
       });
     }
-    return res.json().then(function(data) {
-      var raw = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
-      if (!raw) { showError('No response from API.'); return; }
-      var parsed;
-      try { parsed = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
-      catch(e) { parsed = { translation: raw, corrections: [] }; }
-      if (parsed.translation) {
-        clearError();
-        translationsRef.push({ text: parsed.translation, timestamp: firebase.database.ServerValue.TIMESTAMP });
-        displayTranslation(parsed.translation);
-        historyLog.push({ ko: text, en: parsed.translation });
-        if (historyLog.length > 6) historyLog.shift();
-        setStatus('🎤 Listening…', 'listening');
-      } else {
-        showError('Unexpected response: ' + raw);
+    function addLine(text){
+      g('placeholder').style.display='none';
+      var div=document.createElement('div');
+      div.className='tline newest';div.textContent=text;
+      g('translation-lines').appendChild(div);reclass();trim();
+    }
+    listenTx();
+    liveRef.on('value',function(s){
+      var t=s.val();g('live-line').textContent=t||'';
+      if(t)g('placeholder').style.display='none';
+    });
+    txRef.on('value',function(s){
+      if(!s.val()){
+        g('translation-lines').innerHTML='';g('live-line').textContent='';
+        g('placeholder').style.display='block';listenTx();
       }
     });
-  })
-  .catch(function(err) { showError('Network error: ' + err.message); })
-  .finally(function() {
-    isTranslating = false;
-    if (pending.trim()) translateText(pending.trim());
   });
 }
 </script>
