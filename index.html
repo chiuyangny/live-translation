@@ -124,6 +124,7 @@
   <label style="font-size:13px;color:#888;">Sermon topic:</label>
   <input type="text" id="sermonContext" placeholder="e.g. John 3:16, faith, grace" />
   <button id="startBtn" onclick="toggleListening()">▶ Start</button>
+  <button id="clearBtn" onclick="clearTranslations()" style="background:#555;color:#ccc;">⌫ Clear</button>
   <span id="status">Ready</span>
   <button id="fullscreenBtn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
 </div>
@@ -246,6 +247,12 @@ function displayTranslation(text) {
       reclassLines();
     }
   });
+}
+
+function clearTranslations() {
+  translationsRef.remove();
+  $('translation-lines').innerHTML = '';
+  $('placeholder').style.display = 'block';
 }
 
 function toggleListening() {
