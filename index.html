@@ -49,7 +49,7 @@
   #fullscreenBtn { background: #333; color: #ccc; margin-left: auto; }
   #status { font-size: 12px; color: #666; min-width: 160px; }
   #status.listening { color: #2ecc71; }
-  #status.translating { color: #f39c12; }
+  #status.translating { color: #aaaaaa; }
   #status.error { color: #e74c3c; }
   #error-box {
     display: none;
@@ -85,6 +85,7 @@
   #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
   #translation-box { width: 100%; max-width: 1200px; text-align: center; }
   #translation-lines { display: flex; flex-direction: column; gap: 32px; margin-bottom: 12px; }
+
   .tline {
     font-size: clamp(24px, 4vw, 60px);
     line-height: 1.5;
@@ -94,25 +95,29 @@
   .tline.newest { color: #ffffff; }
   .tline.older  { color: #777777; }
   .tline.oldest { color: #3a3a3a; }
+
+  /* Streaming line — same white as newest, no color flash */
   #streaming-line {
     font-size: clamp(24px, 4vw, 60px);
     line-height: 1.5;
+    color: #ffffff;
     text-shadow: 0 2px 20px rgba(0,0,0,0.8);
-    color: #f0c040;
     min-height: 1.5em;
     transition: opacity 0.3s;
   }
   #streaming-line.empty { opacity: 0; }
+
   #streaming-cursor {
     display: inline-block;
     width: 3px;
     height: 0.85em;
-    background: #f0c040;
+    background: #ffffff;
     vertical-align: text-bottom;
     margin-left: 3px;
     animation: blink 0.7s infinite;
   }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
   #interim-text {
     font-size: clamp(13px, 1.6vw, 20px);
     color: #444;
@@ -154,7 +159,9 @@
   </div>
   <div id="translation-box">
     <div id="translation-lines"></div>
-    <div id="streaming-line" class="empty"><span id="streaming-text"></span><span id="streaming-cursor" style="display:none"></span></div>
+    <div id="streaming-line" class="empty">
+      <span id="streaming-text"></span><span id="streaming-cursor" style="display:none"></span>
+    </div>
     <div id="interim-text"></div>
   </div>
 </div>
@@ -179,16 +186,25 @@ var isOperator = window.location.search.includes('operator');
 
 var rec = null;
 var isListening = false;
-var translateTimer = null;
+var translateTimer = null;    // fires quick translation after final speech
+var lockTimer = null;         // fires to lock+revise after silence
 var rollingTimer = null;
-var pending = '';
+var pending = '';             // untranslated Korean accumulating
 var isTranslating = false;
 var historyLog = [];
 var currentStreamText = '';
 var streamAbortCtrl = null;
 
+// Revision window: Korean fragments + their live English translations
+// that are candidates for consolidation into one clean sentence
+var revisionWindow = [];      // [{ko, en}]  — last few final chunks
+var revisionLineEl = null;    // the DOM element currently being revised
+
+var LOCK_SILENCE_MS = 2200;   // ms of silence before we lock & revise
+
 function $(id) { return document.getElementById(id); }
 
+// ---- Viewer mode ----
 if (!isOperator) {
   document.addEventListener('DOMContentLoaded', function() {
     $('controls').style.display = 'none';
@@ -203,9 +219,9 @@ if (!isOperator) {
         var data = snap.val(), lastKey = null;
         if (data) {
           lastKey = Object.keys(data).pop();
-          Object.values(data).forEach(function(item) { if (item && item.text) displayFinalLine(item.text); });
+          Object.values(data).forEach(function(item) { if (item && item.text) displayFinalLine(item.text, null, true); });
         }
-        childListener = function(s) { var it = s.val(); if (it && it.text) displayFinalLine(it.text); };
+        childListener = function(s) { var it = s.val(); if (it && it.text) displayFinalLine(it.text, null, true); };
         translationsRef.orderByKey().startAfter(lastKey || '0').on('child_added', childListener);
       });
     }
@@ -220,9 +236,9 @@ if (!isOperator) {
   });
 }
 
-function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
-function clearError() { $('error-box').style.display = 'none'; }
-function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
+function showError(msg) { $('error-box').style.display='block'; $('error-box').textContent=msg; setStatus('Error','error'); }
+function clearError() { $('error-box').style.display='none'; }
+function setStatus(msg, cls) { $('status').textContent=msg; $('status').className=cls||''; }
 
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
@@ -237,7 +253,7 @@ function toggleFullscreen() {
 function reclassLines() {
   var all = $('translation-lines').querySelectorAll('.tline');
   all.forEach(function(el, i) {
-    el.classList.remove('newest', 'older', 'oldest');
+    el.classList.remove('newest','older','oldest');
     var fromBottom = all.length - 1 - i;
     if (fromBottom === 0) el.classList.add('newest');
     else if (fromBottom === 1) el.classList.add('older');
@@ -245,9 +261,23 @@ function reclassLines() {
   });
 }
 
-function displayFinalLine(text) {
+// Display a final (locked) line.
+// If reuseEl is provided, update that element in place (for revision).
+// skipFirebase = true when replaying from Firebase (viewer mode).
+function displayFinalLine(text, reuseEl, skipFirebase) {
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
+
+  if (reuseEl && linesEl.contains(reuseEl)) {
+    // Revise in place — update text, brief flash to signal update
+    reuseEl.style.opacity = '0.4';
+    setTimeout(function() {
+      reuseEl.textContent = text;
+      reuseEl.style.opacity = '1';
+    }, 180);
+    return reuseEl;
+  }
+
   var div = document.createElement('div');
   div.className = 'tline newest';
   div.textContent = text;
@@ -262,12 +292,17 @@ function displayFinalLine(text) {
       reclassLines();
     }
   });
+
+  if (!skipFirebase) {
+    translationsRef.push({ text: text, timestamp: firebase.database.ServerValue.TIMESTAMP });
+  }
+  return div;
 }
 
 function setStreamingText(text) {
   var el = $('streaming-line');
-  var t = $('streaming-text');
-  var cur = $('streaming-cursor');
+  var t  = $('streaming-text');
+  var cur= $('streaming-cursor');
   if (!text) {
     el.classList.add('empty');
     t.textContent = '';
@@ -280,27 +315,110 @@ function setStreamingText(text) {
   }
 }
 
+// Move streaming line into the locked stack, return the new DOM element
 function lockStreamingLine(text) {
   setStreamingText('');
-  if (text && text.trim()) {
-    translationsRef.push({ text: text.trim(), timestamp: firebase.database.ServerValue.TIMESTAMP });
-    displayFinalLine(text.trim());
-    historyLog.push({ en: text.trim() });
-    if (historyLog.length > 6) historyLog.shift();
-  }
+  if (!text || !text.trim()) return null;
+  return displayFinalLine(text.trim());
 }
 
 function clearTranslations() {
   translationsRef.remove();
   $('translation-lines').innerHTML = '';
   setStreamingText('');
+  revisionWindow = [];
+  revisionLineEl = null;
   $('placeholder').style.display = 'block';
 }
 
-function toggleListening() {
-  if (isListening) stopListening();
-  else startListening();
+// =============================================
+// REVISION: called after LOCK_SILENCE_MS silence
+// Takes the last N Korean fragments + their quick
+// translations and asks Claude for one clean sentence.
+// =============================================
+async function reviseLastChunks() {
+  if (revisionWindow.length < 2) {
+    // Only one chunk — nothing to merge, just clear window
+    revisionWindow = [];
+    revisionLineEl = null;
+    return;
+  }
+
+  var koText  = revisionWindow.map(function(c){ return c.ko; }).join(' ');
+  var enDraft = revisionWindow.map(function(c){ return c.en; }).join(' ');
+  var targetEl = revisionLineEl; // the DOM line to update in place
+
+  var sermonContext = $('sermonContext').value.trim();
+  var sermonLine = sermonContext ? 'Sermon topic: ' + sermonContext + '\n\n' : '';
+  var contextStr = historyLog.length
+    ? 'Prior sentences:\n' + historyLog.slice(-2).map(function(h){ return h.en; }).join('\n') + '\n\n'
+    : '';
+
+  try {
+    var res = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 120,
+        stream: false,
+        system: 'You are a live interpreter for a Christian worship service. You are given Korean text that was spoken with pauses, and a rough draft English translation of the fragments. Produce ONE clean, natural, complete English sentence that best captures the full meaning. Korean verbs come last — the meaning often only becomes clear at the end. Respond with ONLY the final English sentence, nothing else.',
+        messages: [{
+          role: 'user',
+          content: sermonLine + contextStr +
+            'Korean (full utterance): ' + koText + '\n' +
+            'Draft translation: ' + enDraft + '\n\n' +
+            'Final translation:'
+        }]
+      })
+    });
+
+    if (!res.ok) { revisionWindow = []; revisionLineEl = null; return; }
+    var data = await res.json();
+    var revised = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
+    if (!revised) { revisionWindow = []; revisionLineEl = null; return; }
+
+    // Update the DOM line in place
+    if (targetEl && $('translation-lines').contains(targetEl)) {
+      // Remove all lines added during this revision window except the first one
+      var linesEl = $('translation-lines');
+      var allLines = linesEl.querySelectorAll('.tline');
+      var targetIdx = Array.prototype.indexOf.call(allLines, targetEl);
+      // Remove lines after targetEl that were part of this window
+      for (var i = allLines.length - 1; i > targetIdx; i--) {
+        linesEl.removeChild(allLines[i]);
+      }
+      reclassLines();
+      displayFinalLine(revised, targetEl, true);
+    }
+
+    // Update Firebase with revised text (remove old entries and push revised)
+    // We use a simple approach: push the revision as the canonical version
+    translationsRef.limitToLast(revisionWindow.length + 1).once('value', function(snap) {
+      var data2 = snap.val();
+      if (data2) {
+        // Remove the partial entries and replace with revised
+        var keys = Object.keys(data2);
+        keys.slice(-revisionWindow.length).forEach(function(k) {
+          translationsRef.child(k).remove();
+        });
+      }
+      translationsRef.push({ text: revised, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    });
+
+    historyLog.push({ en: revised });
+    if (historyLog.length > 6) historyLog.shift();
+
+  } catch(e) { /* silently fail — keep whatever was displayed */ }
+
+  revisionWindow = [];
+  revisionLineEl = null;
 }
+
+// =============================================
+// SPEECH RECOGNITION
+// =============================================
+function toggleListening() { if (isListening) stopListening(); else startListening(); }
 
 function startListening() {
   clearError();
@@ -319,7 +437,7 @@ function startListening() {
     $('mic-indicator').classList.add('active');
     setStatus('🎤 Listening…', 'listening');
     rollingTimer = setInterval(function() {
-      if (pending.trim() && !isTranslating) translateStreamingText(pending.trim());
+      if (pending.trim() && !isTranslating) triggerTranslation(pending.trim(), false);
     }, 2500);
   };
 
@@ -335,9 +453,12 @@ function startListening() {
       $('interim-text').textContent = '';
       pending += ' ' + final.trim();
       clearTimeout(translateTimer);
+      // Translate quickly after each final result
       translateTimer = setTimeout(function() {
-        if (pending.trim() && !isTranslating) translateStreamingText(pending.trim());
-      }, 400);
+        if (pending.trim() && !isTranslating) triggerTranslation(pending.trim(), false);
+      }, 350);
+      // Reset the lock/revise timer on every new speech
+      resetLockTimer();
     }
   };
 
@@ -360,6 +481,7 @@ function stopListening() {
   if (rec) { try { rec.stop(); } catch(e) {} rec = null; }
   if (rollingTimer) { clearInterval(rollingTimer); rollingTimer = null; }
   clearTimeout(translateTimer);
+  clearTimeout(lockTimer);
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
   $('mic-indicator').classList.remove('active');
@@ -367,10 +489,32 @@ function stopListening() {
   setStatus('Stopped');
 }
 
-async function translateStreamingText(text, retryCount) {
-  retryCount = retryCount || 0;
+// After silence, lock current streaming output and trigger revision
+function resetLockTimer() {
+  clearTimeout(lockTimer);
+  lockTimer = setTimeout(function() {
+    // Silence detected — lock whatever is streaming and revise
+    if (currentStreamText.trim()) {
+      var lockedEl = lockStreamingLine(currentStreamText);
+      if (lockedEl && revisionWindow.length > 0) {
+        // Add this final chunk to the revision window
+        revisionWindow[revisionWindow.length - 1].en = currentStreamText.trim();
+        if (!revisionLineEl) revisionLineEl = lockedEl;
+      }
+      currentStreamText = '';
+    }
+    if (revisionWindow.length >= 2) reviseLastChunks();
+    else { revisionWindow = []; revisionLineEl = null; }
+  }, LOCK_SILENCE_MS);
+}
+
+// =============================================
+// STREAMING TRANSLATION
+// =============================================
+async function triggerTranslation(text, isRevision) {
   if (isTranslating) return;
   isTranslating = true;
+  var koChunk = pending.trim();
   pending = '';
   currentStreamText = '';
   setStatus('Translating…', 'translating');
@@ -379,7 +523,7 @@ async function translateStreamingText(text, retryCount) {
   var sermonContext = $('sermonContext').value.trim();
   var sermonLine = sermonContext ? 'Sermon topic: ' + sermonContext + '\n\n' : '';
   var contextStr = historyLog.length
-    ? 'Recent:\n' + historyLog.slice(-3).map(function(h) { return 'EN: ' + h.en; }).join('\n') + '\n\n'
+    ? 'Recent:\n' + historyLog.slice(-2).map(function(h){ return 'EN: ' + h.en; }).join('\n') + '\n\n'
     : '';
 
   if (streamAbortCtrl) streamAbortCtrl.abort();
@@ -400,14 +544,8 @@ async function translateStreamingText(text, retryCount) {
     });
 
     if (!res.ok) {
-      var err = await res.json();
-      var msg = err && err.error && err.error.message ? err.error.message : 'HTTP ' + res.status;
-      if ((res.status === 529 || msg.toLowerCase().includes('overload')) && retryCount < 3) {
-        setStatus('Server busy, retrying…', 'translating');
-        isTranslating = false;
-        setTimeout(function() { translateStreamingText(text, retryCount + 1); }, 2000 * (retryCount + 1));
-        return;
-      }
+      var errData = await res.json();
+      var msg = errData && errData.error && errData.error.message ? errData.error.message : 'HTTP ' + res.status;
       showError('API error: ' + msg);
       isTranslating = false;
       return;
@@ -421,7 +559,6 @@ async function translateStreamingText(text, retryCount) {
       var chunk = await reader.read();
       if (chunk.done) break;
       buf += decoder.decode(chunk.value, { stream: true });
-
       var lines = buf.split('\n');
       buf = lines.pop();
 
@@ -429,30 +566,45 @@ async function translateStreamingText(text, retryCount) {
         var line = lines[i].trim();
         if (!line || line === 'event: ping') continue;
         if (line.startsWith('data: ')) {
-          var data = line.slice(6);
-          if (data === '[DONE]') continue;
+          var rawData = line.slice(6);
+          if (rawData === '[DONE]') continue;
           try {
-            var parsed = JSON.parse(data);
+            var parsed = JSON.parse(rawData);
             if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.type === 'text_delta') {
               currentStreamText += parsed.delta.text;
               setStreamingText(currentStreamText);
             }
             if (parsed.type === 'message_stop') {
-              lockStreamingLine(currentStreamText);
+              // Quick translation done — add to revision window, DON'T lock yet
+              // Locking happens after LOCK_SILENCE_MS of no new speech
+              revisionWindow.push({ ko: koChunk, en: currentStreamText.trim() });
+              if (revisionWindow.length === 1) {
+                // First chunk: lock immediately to screen so user sees something
+                var el = lockStreamingLine(currentStreamText);
+                revisionLineEl = el;
+              } else {
+                // Subsequent chunks: show as new line, will be merged on revision
+                var el2 = lockStreamingLine(currentStreamText);
+                if (!revisionLineEl) revisionLineEl = el2;
+              }
+              currentStreamText = '';
               setStatus('🎤 Listening…', 'listening');
               isTranslating = false;
-              if (pending.trim()) translateStreamingText(pending.trim());
+              if (pending.trim()) triggerTranslation(pending.trim(), false);
             }
-          } catch(e) {}
+          } catch(ex) {}
         }
       }
     }
 
     if (isTranslating && currentStreamText.trim()) {
-      lockStreamingLine(currentStreamText);
+      revisionWindow.push({ ko: koChunk, en: currentStreamText.trim() });
+      var el3 = lockStreamingLine(currentStreamText);
+      if (!revisionLineEl) revisionLineEl = el3;
+      currentStreamText = '';
       setStatus('🎤 Listening…', 'listening');
       isTranslating = false;
-      if (pending.trim()) translateStreamingText(pending.trim());
+      if (pending.trim()) triggerTranslation(pending.trim(), false);
     }
 
   } catch(err) {
