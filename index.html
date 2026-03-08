@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Translation</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -142,7 +144,21 @@
 <script>
 // ===== CONFIG =====
 var WORKER_URL = 'https://live-translation.pauljkim22.workers.dev';
+var firebaseConfig = {
+  apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
+  authDomain: "live-translation-fd583.firebaseapp.com",
+  databaseURL: "https://live-translation-fd583-default-rtdb.firebaseio.com",
+  projectId: "live-translation-fd583",
+  storageBucket: "live-translation-fd583.firebasestorage.app",
+  messagingSenderId: "189364035896",
+  appId: "1:189364035896:web:552700e29449859089a1cd"
+};
 // ==================
+
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+var translationsRef = db.ref('translations');
+var isOperator = window.location.search.includes('operator');
 
 var rec = null;
 var isListening = false;
@@ -153,6 +169,30 @@ var isTranslating = false;
 var historyLog = [];
 
 function $(id) { return document.getElementById(id); }
+
+// Viewer mode — no controls, just display
+if (!isOperator) {
+  document.addEventListener('DOMContentLoaded', function() {
+    $('controls').style.display = 'none';
+    $('error-box').style.display = 'none';
+
+    // Load last 10 then listen for new
+    translationsRef.limitToLast(10).once('value', function(snapshot) {
+      var data = snapshot.val();
+      var lastKey = null;
+      if (data) {
+        lastKey = Object.keys(data).pop();
+        Object.values(data).forEach(function(item) {
+          if (item && item.text) displayTranslation(item.text);
+        });
+      }
+      translationsRef.orderByKey().startAfter(lastKey).on('child_added', function(snap) {
+        var item = snap.val();
+        if (item && item.text) displayTranslation(item.text);
+      });
+    });
+  });
+}
 
 function showError(msg) {
   $('error-box').style.display = 'block';
@@ -329,6 +369,7 @@ function translateText(text, retryCount) {
       catch(e) { parsed = { translation: raw, corrections: [] }; }
       if (parsed.translation) {
         clearError();
+        translationsRef.push({ text: parsed.translation, timestamp: firebase.database.ServerValue.TIMESTAMP });
         displayTranslation(parsed.translation);
         historyLog.push({ ko: text, en: parsed.translation });
         if (historyLog.length > 6) historyLog.shift();
