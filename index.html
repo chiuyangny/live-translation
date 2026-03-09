@@ -177,6 +177,8 @@
 
 <script>
 var WORKER_URL = 'https://live-translation.pauljkim22.workers.dev';
+var LOCK_SILENCE_MS = 2200;
+
 var firebaseConfig = {
   apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
   authDomain: "live-translation-fd583.firebaseapp.com",
@@ -196,10 +198,6 @@ function $(id) { return document.getElementById(id); }
 
 // =============================================
 // VIEWER MODE
-// Simple and bulletproof — seenKeys prevents
-// any duplicate regardless of listener timing.
-// Revision is purely a visual operator-side effect;
-// viewers only ever receive final pushed lines.
 // =============================================
 if (!isOperator) {
   document.addEventListener('DOMContentLoaded', function() {
@@ -211,7 +209,6 @@ if (!isOperator) {
 
     var seenKeys = new Set();
 
-    // Load last 10 on arrival, mark all as seen
     translationsRef.limitToLast(10).once('value', function(snap) {
       snap.forEach(function(child) {
         seenKeys.add(child.key);
@@ -219,7 +216,6 @@ if (!isOperator) {
         if (it && it.text) displayFinalLine(it.text, null, true);
       });
 
-      // Now attach child_added — seenKeys blocks history re-firing
       translationsRef.on('child_added', function(snap) {
         if (seenKeys.has(snap.key)) return;
         seenKeys.add(snap.key);
@@ -228,7 +224,6 @@ if (!isOperator) {
       });
     });
 
-    // Watch for board clear
     translationsRef.on('value', function(snap) {
       if (!snap.val()) {
         $('translation-lines').innerHTML = '';
@@ -252,9 +247,9 @@ var isTranslating = false;
 var historyLog = [];
 var currentStreamText = '';
 var streamAbortCtrl = null;
-var revisionWindow = [];   // [{ko, en}]
+var revisionWindow = [];
 var revisionLineEl = null;
-var lastSentText = '';
+var lastRollingText = '';   // <-- NEW: tracks what the rolling timer last fired on
 
 // =============================================
 // SHARED UI HELPERS
@@ -285,9 +280,6 @@ function reclassLines() {
   });
 }
 
-// displayFinalLine: adds a line to the DOM.
-// reuseEl: if provided, updates that element in place (operator revision only).
-// skipFirebase: true in viewer mode and for operator in-place revisions.
 function displayFinalLine(text, reuseEl, skipFirebase) {
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
@@ -341,15 +333,12 @@ function clearTranslations() {
   setStreamingText('');
   revisionWindow = [];
   revisionLineEl = null;
+  lastRollingText = '';
   $('placeholder').style.display = 'block';
 }
 
 // =============================================
 // REVISION
-// Operator-side only. Merges partial chunks into
-// one clean sentence. Only pushes ONE entry to
-// Firebase (the revised final), never deletes.
-// Viewers only ever see this one clean push.
 // =============================================
 async function reviseLastChunks() {
   if (revisionWindow.length < 2) { revisionWindow = []; revisionLineEl = null; return; }
@@ -391,27 +380,22 @@ async function reviseLastChunks() {
     var revised = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
     if (!revised) return;
 
-    // 1. Update operator DOM: collapse partial lines into one revised line
     var linesEl = $('translation-lines');
     if (targetEl && linesEl.contains(targetEl)) {
       var allLines = Array.prototype.slice.call(linesEl.querySelectorAll('.tline'));
       var targetIdx = allLines.indexOf(targetEl);
-      // Remove any lines after the first chunk's line (the partial ones)
       for (var i = allLines.length - 1; i > targetIdx; i--) {
         linesEl.removeChild(allLines[i]);
       }
       reclassLines();
-      displayFinalLine(revised, targetEl, true); // update in place, no Firebase
+      displayFinalLine(revised, targetEl, true);
     }
 
-    // 2. Push ONE clean revised line to Firebase for viewers
-    // (partial chunk lines were never pushed to Firebase — see triggerTranslation)
     translationsRef.push({ text: revised, timestamp: firebase.database.ServerValue.TIMESTAMP });
-
     historyLog.push({ en: revised });
     if (historyLog.length > 6) historyLog.shift();
 
-  } catch(e) { /* silently keep whatever is displayed */ }
+  } catch(e) {}
 }
 
 // =============================================
@@ -434,19 +418,31 @@ function startListening() {
     $('startBtn').classList.add('active');
     $('mic-indicator').classList.add('active');
     setStatus('🎤 Listening…', 'listening');
+    lastRollingText = '';
 
-    // Hard fallback: every 5 seconds, force a translation of whatever we have
+    // Rolling fallback timer — fires every 5s but only acts on NEW text
     rollingTimer = setInterval(function() {
+      if (isTranslating) return;
+
       var interimEl = $('interim-text');
       var interimText = interimEl ? interimEl.textContent.replace(/^"|"$/g, '').trim() : '';
       var text = pending.trim() || interimText;
-      var dbg = $('debug-badge');
-    if (dbg) { dbg.style.display = 'block'; dbg.textContent = 'timer fired | pending:"' + pending.trim() + '" interim:"' + interimText.slice(0,20) + '" translating:' + isTranslating; }
-      if (text && !isTranslating) {
-        pending = '';
-        triggerTranslation(text);
+
+      if (!text) return;
+
+      // KEY FIX: skip if this is the same text we already fired on
+      if (text === lastRollingText) {
+        var dbg = $('debug-badge');
+        if (dbg) dbg.textContent = 'rolling: SKIPPED (same text)';
+        return;
       }
-    }, 3000);
+
+      lastRollingText = text;
+      pending = '';
+      var dbg = $('debug-badge');
+      if (dbg) dbg.textContent = 'rolling: fired on "' + text.slice(0,30) + '"';
+      triggerTranslation(text);
+    }, 5000);
   };
 
   rec.onresult = function(e) {
@@ -459,7 +455,6 @@ function startListening() {
 
     if (interim) {
       $('interim-text').textContent = '"' + interim + '"';
-      // If interim is long enough and nothing is translating, fire early
       var combinedLen = (pending + ' ' + interim).trim().length;
       if (combinedLen > 30 && !isTranslating) {
         clearTimeout(translateTimer);
@@ -467,6 +462,7 @@ function startListening() {
           var text = (pending + ' ' + interim).trim();
           if (text && !isTranslating) {
             pending = '';
+            lastRollingText = text; // mark so rolling timer doesn't repeat it
             triggerTranslation(text);
           }
         }, 800);
@@ -476,10 +472,13 @@ function startListening() {
     if (final) {
       $('interim-text').textContent = '';
       pending += ' ' + final.trim();
-      lastSentText = ''; // reset so new final text always gets sent
+      lastRollingText = ''; // new final arrived — allow rolling timer to act on it if needed
       clearTimeout(translateTimer);
       translateTimer = setTimeout(function() {
-        if (pending.trim() && !isTranslating) triggerTranslation(pending.trim());
+        if (pending.trim() && !isTranslating) {
+          lastRollingText = pending.trim();
+          triggerTranslation(pending.trim());
+        }
       }, 350);
       resetLockTimer();
     }
@@ -507,6 +506,7 @@ function stopListening() {
   $('startBtn').classList.remove('active');
   $('mic-indicator').classList.remove('active');
   $('interim-text').textContent = '';
+  lastRollingText = '';
   setStatus('Stopped');
 }
 
@@ -528,10 +528,6 @@ function resetLockTimer() {
 
 // =============================================
 // STREAMING TRANSLATION
-// KEY DESIGN: partial chunks are shown on the
-// operator screen but NOT pushed to Firebase.
-// Only the final revised sentence gets pushed.
-// This is what keeps the viewer clean.
 // =============================================
 function deStutter(text) {
   var tokens = text.trim().split(/\s+/), out = [];
@@ -542,10 +538,9 @@ function deStutter(text) {
 }
 
 async function triggerTranslation(text) {
-  console.log('triggerTranslation called, isTranslating:', isTranslating, 'text:', text.slice(0,30));
-  if (isTranslating) { console.log('BLOCKED - already translating'); return; }
+  if (isTranslating) return;
   isTranslating = true;
-  var koChunk = deStutter(pending.trim());
+  var koChunk = deStutter(text);
   pending = '';
   currentStreamText = '';
   setStatus('Translating…', 'translating');
@@ -605,19 +600,19 @@ async function triggerTranslation(text) {
             var chunkText = currentStreamText.trim();
             currentStreamText = '';
 
-            // Add to revision window
             revisionWindow.push({ ko: koChunk, en: chunkText });
             var dbg = $('debug-badge');
             if (dbg) dbg.textContent = 'window: ' + revisionWindow.length + ' chunks | lock in ' + (LOCK_SILENCE_MS/1000) + 's';
 
-            // Show on operator screen immediately (skipFirebase=true — viewer gets
-            // the clean revised version later, not these partials)
             var lineEl = lockStreamingLine(chunkText);
             if (!revisionLineEl) revisionLineEl = lineEl;
 
             setStatus('🎤 Listening…', 'listening');
             isTranslating = false;
-            if (pending.trim()) triggerTranslation(pending.trim());
+            if (pending.trim()) {
+              lastRollingText = pending.trim();
+              triggerTranslation(pending.trim());
+            }
           }
         } catch(ex) {}
       }
@@ -632,7 +627,10 @@ async function triggerTranslation(text) {
       if (!revisionLineEl) revisionLineEl = lineEl2;
       setStatus('🎤 Listening…', 'listening');
       isTranslating = false;
-      if (pending.trim()) triggerTranslation(pending.trim());
+      if (pending.trim()) {
+        lastRollingText = pending.trim();
+        triggerTranslation(pending.trim());
+      }
     }
 
   } catch(err) {
