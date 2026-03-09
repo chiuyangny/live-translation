@@ -254,7 +254,7 @@ var currentStreamText = '';
 var streamAbortCtrl = null;
 var revisionWindow = [];   // [{ko, en}]
 var revisionLineEl = null;
-var LOCK_SILENCE_MS = 4000;
+var lastSentText = '';
 
 // =============================================
 // SHARED UI HELPERS
@@ -476,6 +476,7 @@ function startListening() {
     if (final) {
       $('interim-text').textContent = '';
       pending += ' ' + final.trim();
+      lastSentText = ''; // reset so new final text always gets sent
       clearTimeout(translateTimer);
       translateTimer = setTimeout(function() {
         if (pending.trim() && !isTranslating) triggerTranslation(pending.trim());
