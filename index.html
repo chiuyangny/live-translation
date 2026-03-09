@@ -250,7 +250,8 @@ var streamAbortCtrl = null;
 var revisionWindow = [];
 var revisionLineEl = null;
 var lastRollingText = '';
-var lastFinalIndex = -1;  // highest result index we've already processed as final
+var lastFinalIndex = -1;
+var lastSentInterim = '';  // the interim text we most recently sent to translation
 
 // =============================================
 // SHARED UI HELPERS
@@ -421,81 +422,61 @@ function startListening() {
     setStatus('🎤 Listening…', 'listening');
     lastRollingText = '';
     lastFinalIndex = -1;
+    lastSentInterim = '';
 
     // Rolling fallback timer — fires every 5s but only acts on NEW text
     rollingTimer = setInterval(function() {
       if (isTranslating) return;
-
       var interimEl = $('interim-text');
       var interimText = interimEl ? interimEl.textContent.replace(/^"|"$/g, '').trim() : '';
-      var text = pending.trim() || interimText;
+      if (!interimText) return;
 
-      if (!text) return;
-
-      // KEY FIX: skip if this is the same text we already fired on
-      if (text === lastRollingText) {
-        var dbg = $('debug-badge');
-        if (dbg) dbg.textContent = 'rolling: SKIPPED (same text)';
-        return;
+      // Only fire on text we haven't sent yet
+      var newPart = interimText;
+      if (lastSentInterim && interimText.startsWith(lastSentInterim)) {
+        newPart = interimText.slice(lastSentInterim.length).trim();
       }
+      if (!newPart) return;
 
-      lastRollingText = text;
-      pending = '';
+      lastSentInterim = interimText;
+      lastRollingText = interimText;
       var dbg = $('debug-badge');
-      if (dbg) dbg.textContent = 'rolling: fired on "' + text.slice(0,30) + '"';
-      triggerTranslation(text);
+      if (dbg) dbg.textContent = 'rolling fired: "' + newPart.slice(0,30) + '"';
+      triggerTranslation(newPart);
     }, 5000);
   };
 
   rec.onresult = function(e) {
-    var interim = '', final = '';
-
-    // Debug: log every onresult event to console
-    var allResults = [];
-    for (var j = 0; j < e.results.length; j++) {
-      allResults.push((e.results[j].isFinal ? 'F' : 'i') + j + ':' + e.results[j][0].transcript.slice(0,10));
+    // Collect full interim string from all results
+    var interim = '';
+    for (var i = 0; i < e.results.length; i++) {
+      interim += e.results[i][0].transcript;
     }
-    console.log('onresult | ri=' + e.resultIndex + ' lastFI=' + lastFinalIndex + ' pending="' + pending.trim().slice(0,30) + '" | ' + allResults.join(', '));
+    interim = interim.trim();
 
-    for (var i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) {
-        if (i > lastFinalIndex) {
-          lastFinalIndex = i;
-          final += e.results[i][0].transcript;
-        }
-      } else {
-        interim += e.results[i][0].transcript;
-      }
+    if (!interim) return;
+    $('interim-text').textContent = '"' + interim + '"';
+
+    // Figure out what's NEW since we last sent a translation
+    // If interim starts with what we already sent, the new part is the suffix
+    var newPart = interim;
+    if (lastSentInterim && interim.startsWith(lastSentInterim)) {
+      newPart = interim.slice(lastSentInterim.length).trim();
     }
 
-    if (interim) {
-      $('interim-text').textContent = '"' + interim + '"';
-      var combinedLen = (pending + ' ' + interim).trim().length;
-      if (combinedLen > 30 && !isTranslating) {
-        clearTimeout(translateTimer);
-        translateTimer = setTimeout(function() {
-          var text = (pending + ' ' + interim).trim();
-          if (text && !isTranslating) {
-            pending = '';
-            lastRollingText = text; // mark so rolling timer doesn't repeat it
-            triggerTranslation(text);
-          }
-        }, 800);
-      }
-    }
+    var dbg = $('debug-badge');
+    if (dbg) dbg.textContent = 'new: "' + newPart.slice(0,20) + '" | sent: "' + lastSentInterim.slice(0,20) + '"';
 
-    if (final) {
-      $('interim-text').textContent = '';
-      pending += ' ' + final.trim();
-      lastRollingText = ''; // new final arrived — allow rolling timer to act on it if needed
+    // Fire translation when new unsent portion is long enough
+    if (newPart.length > 15 && !isTranslating) {
       clearTimeout(translateTimer);
       translateTimer = setTimeout(function() {
-        if (pending.trim() && !isTranslating) {
-          lastRollingText = pending.trim();
-          triggerTranslation(pending.trim());
+        if (!isTranslating && newPart.length > 0) {
+          lastSentInterim = interim; // mark full interim as sent
+          lastRollingText = interim;
+          triggerTranslation(newPart);
         }
-      }, 350);
-      resetLockTimer();
+      }, 600);
     }
   };
 
