@@ -449,6 +449,14 @@ function startListening() {
 
   rec.onresult = function(e) {
     var interim = '', final = '';
+
+    // Debug: log every onresult event to console
+    var allResults = [];
+    for (var j = 0; j < e.results.length; j++) {
+      allResults.push((e.results[j].isFinal ? 'F' : 'i') + j + ':' + e.results[j][0].transcript.slice(0,10));
+    }
+    console.log('onresult | ri=' + e.resultIndex + ' lastFI=' + lastFinalIndex + ' pending="' + pending.trim().slice(0,30) + '" | ' + allResults.join(', '));
+
     for (var i = e.resultIndex; i < e.results.length; i++) {
       if (e.results[i].isFinal) {
         if (i > lastFinalIndex) {
