@@ -541,7 +541,8 @@ function deStutter(text) {
 }
 
 async function triggerTranslation(text) {
-  if (isTranslating) return;
+  console.log('triggerTranslation called, isTranslating:', isTranslating, 'text:', text.slice(0,30));
+  if (isTranslating) { console.log('BLOCKED - already translating'); return; }
   isTranslating = true;
   var koChunk = deStutter(pending.trim());
   pending = '';
