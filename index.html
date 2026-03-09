@@ -24,12 +24,12 @@
   #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
   #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
   #translation-box { width: 100%; max-width: 1200px; text-align: center; }
-  #translation-lines { display: flex; flex-direction: column; gap: 32px; margin-bottom: 12px; }
-  .tline { font-size: clamp(24px,4vw,60px); line-height: 1.5; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.5s, opacity 0.6s; }
+  #translation-lines { display: flex; flex-direction: column; gap: 14px; margin-bottom: 12px; }
+  .tline { font-size: clamp(18px,2.5vw,36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.6s, opacity 0.5s, transform 0.5s ease, max-height 0.5s ease, margin 0.5s ease; overflow: hidden; }
   .tline.newest { color: #ffffff; }
   .tline.older  { color: #ffffff; }
   .tline.oldest { color: #666666; }
-  #streaming-line { font-size: clamp(24px,4vw,60px); line-height: 1.5; color: #ffffff; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.5em; transition: opacity 0.3s; }
+  #streaming-line { font-size: clamp(18px,2.5vw,36px); line-height: 1.4; color: #ffffff; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.4em; transition: opacity 0.3s; }
   #streaming-line.empty { opacity: 0; }
   #streaming-cursor { display: inline-block; width: 3px; height: 0.85em; background: #ffffff; vertical-align: text-bottom; margin-left: 3px; animation: blink 0.7s infinite; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
@@ -142,9 +142,8 @@ function reclassLines(){
   all.forEach(function(el,i){
     el.classList.remove('newest','older','oldest');
     var fb=all.length-1-i;
-    if(fb===0) el.classList.add('newest');
-    else if(fb===1) el.classList.add('older');
-    else el.classList.add('oldest');
+    if(fb<=2) el.classList.add('newest');  // bottom 3 = white
+    else el.classList.add('oldest');        // older = gray
   });
 }
 
@@ -161,6 +160,8 @@ function displayFinalLine(text, skipFirebase){
     while(linesEl.scrollHeight>maxH && linesEl.children.length>1){ linesEl.removeChild(linesEl.firstChild); reclassLines(); }
   });
   if(!skipFirebase) translationsRef.push({ text:text, timestamp:firebase.database.ServerValue.TIMESTAMP });
+  // Keep max 5 lines
+  while(linesEl.children.length > 5){ linesEl.removeChild(linesEl.firstChild); reclassLines(); }
 }
 
 function setStreamingText(text){
