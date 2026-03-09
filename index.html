@@ -21,19 +21,19 @@
   #status.error { color: #e74c3c; }
   #error-box { display: none; background: #1a0000; border: 1px solid #500; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #ff6b6b; margin: 6px 20px; font-family: monospace; word-break: break-all; flex-shrink: 0; }
   #display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 40px 60px; position: relative; overflow: hidden; }
-  #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #2a2a2a; pointer-events: none; }
+  #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
   #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
   #translation-box { width: 100%; max-width: 1200px; text-align: center; }
   #translation-lines { display: flex; flex-direction: column; gap: 32px; margin-bottom: 12px; }
-  .tline { font-size: clamp(24px, 4vw, 60px); line-height: 1.5; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.5s, opacity 0.6s; }
+  .tline { font-size: clamp(24px,4vw,60px); line-height: 1.5; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.5s, opacity 0.6s; }
   .tline.newest { color: #ffffff; }
   .tline.older  { color: #ffffff; }
   .tline.oldest { color: #666666; }
-  #streaming-line { font-size: clamp(24px, 4vw, 60px); line-height: 1.5; color: #ffffff; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.5em; transition: opacity 0.3s; }
+  #streaming-line { font-size: clamp(24px,4vw,60px); line-height: 1.5; color: #ffffff; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.5em; transition: opacity 0.3s; }
   #streaming-line.empty { opacity: 0; }
   #streaming-cursor { display: inline-block; width: 3px; height: 0.85em; background: #ffffff; vertical-align: text-bottom; margin-left: 3px; animation: blink 0.7s infinite; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-  #interim-text { font-size: clamp(13px, 1.6vw, 20px); color: #444; margin-top: 18px; font-style: italic; min-height: 1.4em; font-family: sans-serif; }
+  #interim-text { font-size: clamp(13px,1.6vw,20px); color: #444; margin-top: 18px; font-style: italic; min-height: 1.4em; font-family: sans-serif; }
   #debug-badge { position: fixed; bottom: 24px; left: 20px; font-size: 11px; font-family: monospace; color: #555; background: #111; padding: 4px 8px; border-radius: 4px; border: 1px solid #222; pointer-events: none; }
   #mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; }
   #mic-indicator.active { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; animation: pulse 1.5s infinite; }
@@ -66,9 +66,9 @@
 <div id="debug-badge">ready</div>
 
 <script>
-var WORKER_URL = 'https://live-translation.pauljkim22.workers.dev';
-var SILENCE_MS = 3000;
-var MAX_CHARS  = 80;
+var WORKER_URL  = 'https://live-translation.pauljkim22.workers.dev';
+var SILENCE_MS  = 3000;   // silence before translating
+var MAX_CHARS   = 80;     // hard cap for unbroken streams
 
 var firebaseConfig = {
   apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
@@ -79,16 +79,13 @@ var firebaseConfig = {
   messagingSenderId: "189364035896",
   appId: "1:189364035896:web:552700e29449859089a1cd"
 };
-
 firebase.initializeApp(firebaseConfig);
 var db = firebase.database();
 var translationsRef = db.ref('translations');
 var isOperator = window.location.search.includes('operator');
-function $(id) { return document.getElementById(id); }
+function $(id){ return document.getElementById(id); }
 
-// =============================================
-// VIEWER MODE
-// =============================================
+// ── VIEWER ──────────────────────────────────
 if (!isOperator) {
   document.addEventListener('DOMContentLoaded', function() {
     $('controls').style.display = 'none';
@@ -111,297 +108,273 @@ if (!isOperator) {
       });
     });
     translationsRef.on('value', function(snap) {
-      if (!snap.val()) {
-        $('translation-lines').innerHTML = '';
-        $('placeholder').style.display = 'block';
-        seenKeys.clear();
-      }
+      if (!snap.val()) { $('translation-lines').innerHTML=''; $('placeholder').style.display='block'; seenKeys.clear(); }
     });
   });
 }
 
-// =============================================
-// OPERATOR STATE
-// =============================================
-var rec          = null;
-var isListening  = false;
-var silenceTimer = null;
+// ── OPERATOR STATE ───────────────────────────
+var rec           = null;
+var isListening   = false;
+var silenceTimer  = null;
 var isTranslating = false;
-var pendingText  = '';     // queued while translating
-var historyLog   = [];
+var historyLog    = [];
 var currentStreamText = '';
-var bufferedText = '';
 
-// =============================================
-// UI HELPERS
-// =============================================
-function showError(msg) { $('error-box').style.display='block'; $('error-box').textContent=msg; setStatus('Error','error'); }
-function clearError()   { $('error-box').style.display='none'; }
-function setStatus(msg, cls) { $('status').textContent=msg; $('status').className=cls||''; }
-function dbg(msg) { var el=$('debug-badge'); if(el) el.textContent=msg; }
+// The single source of truth for accumulated Korean text.
+// Recognition NEVER restarts — we just track a cursor into this string.
+var fullTranscript = '';   // everything the Speech API has given us
+var cursor         = 0;   // how many chars we've already sent for translation
 
-function toggleFullscreen() {
-  if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); $('controls').style.display='none'; }
+// ── UI HELPERS ───────────────────────────────
+function showError(msg){ $('error-box').style.display='block'; $('error-box').textContent=msg; setStatus('Error','error'); }
+function clearError()  { $('error-box').style.display='none'; }
+function setStatus(msg,cls){ $('status').textContent=msg; $('status').className=cls||''; }
+function dbg(msg){ var el=$('debug-badge'); if(el) el.textContent=msg; }
+
+function toggleFullscreen(){
+  if (!document.fullscreenElement){ document.documentElement.requestFullscreen(); $('controls').style.display='none'; }
   else { document.exitFullscreen(); $('controls').style.display='flex'; }
 }
 
-function reclassLines() {
-  var all = $('translation-lines').querySelectorAll('.tline');
-  all.forEach(function(el, i) {
+function reclassLines(){
+  var all=$('translation-lines').querySelectorAll('.tline');
+  all.forEach(function(el,i){
     el.classList.remove('newest','older','oldest');
-    var fb = all.length - 1 - i;
-    if (fb===0) el.classList.add('newest');
-    else if (fb===1) el.classList.add('older');
+    var fb=all.length-1-i;
+    if(fb===0) el.classList.add('newest');
+    else if(fb===1) el.classList.add('older');
     else el.classList.add('oldest');
   });
 }
 
-function displayFinalLine(text, skipFirebase) {
-  $('placeholder').style.display = 'none';
-  var linesEl = $('translation-lines');
-  var div = document.createElement('div');
-  div.className = 'tline newest';
-  div.textContent = text;
-  div.style.opacity = '0';
+function displayFinalLine(text, skipFirebase){
+  $('placeholder').style.display='none';
+  var linesEl=$('translation-lines');
+  var div=document.createElement('div');
+  div.className='tline newest'; div.textContent=text; div.style.opacity='0';
   linesEl.appendChild(div);
-  requestAnimationFrame(function() { requestAnimationFrame(function() { div.style.opacity='1'; }); });
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ div.style.opacity='1'; }); });
   reclassLines();
-  requestAnimationFrame(function() {
-    var maxH = $('display').clientHeight - 120;
-    while (linesEl.scrollHeight > maxH && linesEl.children.length > 1) {
-      linesEl.removeChild(linesEl.firstChild); reclassLines();
-    }
+  requestAnimationFrame(function(){
+    var maxH=$('display').clientHeight-120;
+    while(linesEl.scrollHeight>maxH && linesEl.children.length>1){ linesEl.removeChild(linesEl.firstChild); reclassLines(); }
   });
-  if (!skipFirebase) translationsRef.push({ text: text, timestamp: firebase.database.ServerValue.TIMESTAMP });
+  if(!skipFirebase) translationsRef.push({ text:text, timestamp:firebase.database.ServerValue.TIMESTAMP });
 }
 
-function setStreamingText(text) {
-  var el=$('streaming-line'), t=$('streaming-text'), cur=$('streaming-cursor');
-  if (!text) { el.classList.add('empty'); t.textContent=''; cur.style.display='none'; }
+function setStreamingText(text){
+  var el=$('streaming-line'),t=$('streaming-text'),cur=$('streaming-cursor');
+  if(!text){ el.classList.add('empty'); t.textContent=''; cur.style.display='none'; }
   else { $('placeholder').style.display='none'; el.classList.remove('empty'); t.textContent=text; cur.style.display='inline-block'; }
 }
 
-function clearTranslations() {
+function clearTranslations(){
   translationsRef.remove();
-  $('translation-lines').innerHTML = '';
+  $('translation-lines').innerHTML='';
   setStreamingText('');
-  bufferedText = '';
-  pendingText = '';
-  $('placeholder').style.display = 'block';
+  fullTranscript=''; cursor=0;
+  $('placeholder').style.display='block';
 }
 
-// =============================================
-// SPEECH RECOGNITION
-// Single buildRec() used for all start/restart
-// =============================================
-function toggleListening() { if (isListening) stopListening(); else startListening(); }
+// ── SPEECH RECOGNITION ───────────────────────
+// Recognition runs continuously and is NEVER restarted.
+// The Speech API keeps rewriting fullTranscript as it refines.
+// We only look at text beyond `cursor` to avoid retranslating.
 
-function startListening() {
+function toggleListening(){ if(isListening) stopListening(); else startListening(); }
+
+function startListening(){
   clearError();
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { showError('Please use Google Chrome.'); return; }
-  isListening = true;
-  bufferedText = '';
-  $('startBtn').textContent = '■ Stop';
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ showError('Please use Google Chrome.'); return; }
+
+  isListening=true;
+  fullTranscript='';
+  cursor=0;
+  $('startBtn').textContent='■ Stop';
   $('startBtn').classList.add('active');
   $('mic-indicator').classList.add('active');
-  setStatus('🎤 Listening…', 'listening');
-  spawnRec();
-}
+  setStatus('🎤 Listening…','listening');
 
-function spawnRec() {
-  if (!isListening) return;
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  rec = new SR();
-  rec.lang = 'ko-KR';
-  rec.continuous = true;
-  rec.interimResults = true;
+  rec=new SR();
+  rec.lang='ko-KR';
+  rec.continuous=true;
+  rec.interimResults=true;
 
-  rec.onresult = function(e) {
-    var full = '';
-    for (var i = 0; i < e.results.length; i++) full += e.results[i][0].transcript;
-    full = full.trim();
-    if (!full) return;
+  rec.onresult=function(e){
+    // Rebuild full transcript from all results
+    var full='';
+    for(var i=0;i<e.results.length;i++) full+=e.results[i][0].transcript;
+    full=full.trim();
+    fullTranscript=full;
 
-    bufferedText = full;
-    $('interim-text').textContent = '"' + full + '"';
-    dbg('buf:' + full.length + 'ch translating:' + isTranslating);
+    // Text beyond what we've already translated
+    var unsent=full.slice(cursor).trim();
+    $('interim-text').textContent = unsent ? '"'+unsent+'"' : '';
+    dbg('total:'+full.length+' cursor:'+cursor+' unsent:'+unsent.length+' busy:'+isTranslating);
+
+    if(!unsent) return;
 
     // Reset silence timer
     clearTimeout(silenceTimer);
 
-    // Hard cap for long unbroken speech
-    if (full.length >= MAX_CHARS) {
-      fireTranslation();
+    // Hard cap: if unsent portion is very long, fire immediately
+    if(unsent.length>=MAX_CHARS){
+      commitTranslation();
       return;
     }
 
-    // Normal: wait for silence
-    silenceTimer = setTimeout(fireTranslation, SILENCE_MS);
+    // Wait for silence
+    silenceTimer=setTimeout(commitTranslation, SILENCE_MS);
   };
 
-  rec.onerror = function(e) {
-    if (e.error === 'no-speech' || e.error === 'aborted') return;
-    if (e.error === 'not-allowed') { showError('Microphone access denied.'); stopListening(); }
+  rec.onerror=function(e){
+    if(e.error==='no-speech'||e.error==='aborted') return;
+    if(e.error==='not-allowed'){ showError('Microphone access denied.'); stopListening(); }
   };
 
-  // onend: always respawn unless we're stopped
-  rec.onend = function() {
-    if (!isListening) return;
-    // If translating, wait for it to finish — triggerTranslation will call spawnRec when done
-    if (!isTranslating) setTimeout(spawnRec, 150);
+  // Auto-restart if Chrome kills the session (it does this after ~60s)
+  rec.onend=function(){
+    if(!isListening) return;
+    // Preserve cursor — new session transcript starts fresh but cursor tracks globally
+    var savedCursor=cursor;
+    setTimeout(function(){
+      if(!isListening) return;
+      var SR2=window.SpeechRecognition||window.webkitSpeechRecognition;
+      rec=new SR2();
+      rec.lang='ko-KR'; rec.continuous=true; rec.interimResults=true;
+      // After restart, full transcript resets to zero, so reset cursor too
+      fullTranscript=''; cursor=0;
+      rec.onresult=arguments.callee.caller ? null : null; // will be set below
+      startListening._attach(rec);
+      try{ rec.start(); }catch(ex){}
+    },200);
   };
 
-  try { rec.start(); } catch(e) {}
+  startListening._attach=function(r){
+    r.onresult=rec.onresult;
+    r.onerror=rec.onerror;
+    r.onend=rec.onend;
+  };
+
+  try{ rec.start(); }catch(e){}
 }
 
-function fireTranslation() {
+function commitTranslation(){
   clearTimeout(silenceTimer);
-  silenceTimer = null;
-  var text = bufferedText.trim();
-  bufferedText = '';
-  $('interim-text').textContent = '';
+  silenceTimer=null;
+  if(isTranslating) return; // will pick up after current translation via fullTranscript
 
-  // Kill current rec session — spawnRec will be called after translation completes
-  if (rec) { try { rec.onend = null; rec.stop(); } catch(e) {} rec = null; }
+  var unsent=fullTranscript.slice(cursor).trim();
+  if(!unsent) return;
 
-  if (!text) { if (isListening) setTimeout(spawnRec, 150); return; }
-  if (isTranslating) { pendingText += ' ' + text; return; }
-
-  triggerTranslation(text);
+  // Advance cursor to current end of transcript
+  cursor=fullTranscript.length;
+  $('interim-text').textContent='';
+  triggerTranslation(unsent);
 }
 
-function stopListening() {
-  isListening = false;
-  clearTimeout(silenceTimer);
-  silenceTimer = null;
-  if (rec) { try { rec.onend = null; rec.stop(); } catch(e) {} rec = null; }
-  $('startBtn').textContent = '▶ Start';
+function stopListening(){
+  isListening=false;
+  clearTimeout(silenceTimer); silenceTimer=null;
+  if(rec){ try{ rec.onend=null; rec.stop(); }catch(e){} rec=null; }
+  $('startBtn').textContent='▶ Start';
   $('startBtn').classList.remove('active');
   $('mic-indicator').classList.remove('active');
-  $('interim-text').textContent = '';
-  bufferedText = '';
+  $('interim-text').textContent='';
+  fullTranscript=''; cursor=0;
   setStatus('Stopped');
 }
 
-// =============================================
-// STREAMING TRANSLATION
-// Calls spawnRec() when done so recognition
-// always restarts cleanly after each chunk.
-// =============================================
-async function triggerTranslation(text) {
-  if (isTranslating) { pendingText += ' ' + text; return; }
-  isTranslating = true;
-  currentStreamText = '';
-  setStatus('Translating…', 'translating');
+// ── TRANSLATION ──────────────────────────────
+async function triggerTranslation(text){
+  if(isTranslating) return;
+  isTranslating=true;
+  currentStreamText='';
+  setStatus('Translating…','translating');
   clearError();
 
-  var safetyTimeout = setTimeout(function() {
-    if (!isTranslating) return;
-    if (currentStreamText.trim()) {
-      displayFinalLine(currentStreamText.trim());
-      historyLog.push({ en: currentStreamText.trim() });
-      if (historyLog.length > 6) historyLog.shift();
-    }
-    isTranslating = false;
-    setStatus('🎤 Listening…', 'listening');
+  var safetyTimeout=setTimeout(function(){
+    if(!isTranslating) return;
+    if(currentStreamText.trim()){ displayFinalLine(currentStreamText.trim()); historyLog.push({en:currentStreamText.trim()}); if(historyLog.length>6) historyLog.shift(); }
+    isTranslating=false; setStatus('🎤 Listening…','listening');
     afterTranslation();
-  }, 15000);
+  },15000);
 
-  var sermonContext = $('sermonContext').value.trim();
-  var sermonLine = sermonContext ? 'Sermon topic: ' + sermonContext + '\n\n' : '';
-  var contextStr = historyLog.length
-    ? 'Recent:\n' + historyLog.slice(-2).map(function(h){ return 'EN: '+h.en; }).join('\n') + '\n\n'
-    : '';
+  var sermonContext=$('sermonContext').value.trim();
+  var sermonLine=sermonContext?'Sermon topic: '+sermonContext+'\n\n':'';
+  var contextStr=historyLog.length?'Recent:\n'+historyLog.slice(-2).map(function(h){return 'EN: '+h.en;}).join('\n')+'\n\n':'';
 
-  try {
-    var res = await fetch(WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 150,
-        stream: true,
-        system: 'You are a live interpreter for a Christian worship service. Translate Korean into natural, reverent English. Korean often omits subjects — infer from context. Keep any English words as-is. The speaker may pause mid-sentence — translate the full meaning of what was said. Respond with ONLY the English translation, no quotes or explanation.',
-        messages: [{ role: 'user', content: sermonLine + contextStr + 'Translate:\n' + text }]
+  try{
+    var res=await fetch(WORKER_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-5',
+        max_tokens:150,
+        stream:true,
+        system:'You are a live interpreter for a Christian worship service. Translate Korean into natural, reverent English. Korean often omits subjects — infer from context. Keep any English words as-is. The speaker may pause mid-sentence — translate the full meaning of what was said. Respond with ONLY the English translation, no quotes or explanation.',
+        messages:[{role:'user',content:sermonLine+contextStr+'Translate:\n'+text}]
       })
     });
 
-    if (!res.ok) {
-      var errData = await res.json();
-      showError('API error: ' + (errData && errData.error ? errData.error.message : 'HTTP ' + res.status));
-      isTranslating = false;
-      clearTimeout(safetyTimeout);
-      afterTranslation();
-      return;
+    if(!res.ok){
+      var errData=await res.json();
+      showError('API error: '+(errData&&errData.error?errData.error.message:'HTTP '+res.status));
+      isTranslating=false; clearTimeout(safetyTimeout); afterTranslation(); return;
     }
 
-    var reader = res.body.getReader(), decoder = new TextDecoder(), buf = '';
-    while (true) {
-      var chunk = await reader.read();
-      if (chunk.done) break;
-      buf += decoder.decode(chunk.value, { stream: true });
-      var lines = buf.split('\n'); buf = lines.pop();
-      for (var i = 0; i < lines.length; i++) {
-        var line = lines[i].trim();
-        if (!line || line === 'event: ping' || !line.startsWith('data: ')) continue;
-        var raw = line.slice(6);
-        if (raw === '[DONE]') continue;
-        try {
-          var parsed = JSON.parse(raw);
-          if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.type === 'text_delta') {
-            currentStreamText += parsed.delta.text;
-            setStreamingText(currentStreamText);
+    var reader=res.body.getReader(),decoder=new TextDecoder(),buf='';
+    while(true){
+      var chunk=await reader.read();
+      if(chunk.done) break;
+      buf+=decoder.decode(chunk.value,{stream:true});
+      var lines=buf.split('\n'); buf=lines.pop();
+      for(var i=0;i<lines.length;i++){
+        var line=lines[i].trim();
+        if(!line||line==='event: ping'||!line.startsWith('data: ')) continue;
+        var raw=line.slice(6);
+        if(raw==='[DONE]') continue;
+        try{
+          var parsed=JSON.parse(raw);
+          if(parsed.type==='content_block_delta'&&parsed.delta&&parsed.delta.type==='text_delta'){
+            currentStreamText+=parsed.delta.text; setStreamingText(currentStreamText);
           }
-          if (parsed.type === 'message_stop') {
+          if(parsed.type==='message_stop'){
             clearTimeout(safetyTimeout);
-            var final = currentStreamText.trim();
-            currentStreamText = '';
-            setStreamingText('');
-            if (final) {
-              displayFinalLine(final);
-              historyLog.push({ en: final });
-              if (historyLog.length > 6) historyLog.shift();
-            }
-            isTranslating = false;
-            setStatus('🎤 Listening…', 'listening');
-            dbg('done | history:' + historyLog.length);
+            var fin=currentStreamText.trim(); currentStreamText=''; setStreamingText('');
+            if(fin){ displayFinalLine(fin); historyLog.push({en:fin}); if(historyLog.length>6) historyLog.shift(); }
+            isTranslating=false; setStatus('🎤 Listening…','listening');
+            dbg('done | history:'+historyLog.length);
             afterTranslation();
           }
-        } catch(ex) {}
+        }catch(ex){}
       }
     }
-
-    // Fallback if stream ends without message_stop
-    if (isTranslating) {
+    if(isTranslating){
       clearTimeout(safetyTimeout);
-      var final2 = currentStreamText.trim();
-      currentStreamText = ''; setStreamingText('');
-      if (final2) { displayFinalLine(final2); historyLog.push({ en: final2 }); if (historyLog.length > 6) historyLog.shift(); }
-      isTranslating = false;
-      setStatus('🎤 Listening…', 'listening');
-      afterTranslation();
+      var fin2=currentStreamText.trim(); currentStreamText=''; setStreamingText('');
+      if(fin2){ displayFinalLine(fin2); historyLog.push({en:fin2}); if(historyLog.length>6) historyLog.shift(); }
+      isTranslating=false; setStatus('🎤 Listening…','listening'); afterTranslation();
     }
-
-  } catch(err) {
+  }catch(err){
     clearTimeout(safetyTimeout);
-    if (err.name !== 'AbortError') showError('Network error: ' + err.message);
-    isTranslating = false;
-    afterTranslation();
+    if(err.name!=='AbortError') showError('Network error: '+err.message);
+    isTranslating=false; afterTranslation();
   }
 }
 
-// Called after every translation completes.
-// If text queued up while we were busy, translate it next.
-// Otherwise restart recognition.
-function afterTranslation() {
-  var queued = pendingText.trim();
-  pendingText = '';
-  if (queued) {
-    triggerTranslation(queued);
-  } else if (isListening) {
-    setTimeout(spawnRec, 150);
+// After translation: check if new unsent text accumulated while we were busy
+function afterTranslation(){
+  var unsent=fullTranscript.slice(cursor).trim();
+  if(unsent && unsent.length>5){
+    // There's new text — translate it
+    cursor=fullTranscript.length;
+    $('interim-text').textContent='';
+    triggerTranslation(unsent);
   }
+  // Otherwise just keep listening — silenceTimer will fire next time
 }
 </script>
 </body>
