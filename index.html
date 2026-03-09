@@ -159,7 +159,7 @@ function displayFinalLine(text, skipFirebase){
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
 
-  // If the last line is short, merge this text into it instead of adding a new line
+  // If the last line is short, merge into it instead of adding a new line
   var lastLine = linesEl.lastChild;
   if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
     var merged = lastLine.textContent + ' ' + text;
@@ -170,38 +170,37 @@ function displayFinalLine(text, skipFirebase){
     return lastLine;
   }
 
-  // Otherwise add as new line, slide in from below
+  // Measure current height before adding new line
+  var prevHeight = linesEl.offsetHeight;
+
+  // Add new line (invisible, no transform — it just appears in place)
   var div = document.createElement('div');
   div.className = 'tline newest';
   div.textContent = text;
   div.style.opacity = '0';
-  div.style.transform = 'translateY(24px)';
   linesEl.appendChild(div);
-  requestAnimationFrame(function(){ requestAnimationFrame(function(){
-    div.style.opacity = '1';
-    div.style.transform = 'translateY(0)';
-  }); });
 
-  reclassLines();
-
-  // Smoothly collapse oldest line if over MAX_LINES
+  // Remove oldest if over MAX_LINES (instant, before animation)
   while (linesEl.children.length > MAX_LINES) {
-    var oldest = linesEl.firstChild;
-    var h = oldest.offsetHeight;
-    oldest.style.maxHeight = h + 'px';
-    oldest.style.overflow = 'hidden';
-    requestAnimationFrame(function(){ requestAnimationFrame(function(){
-      oldest.style.maxHeight = '0';
-      oldest.style.opacity = '0';
-      oldest.style.marginBottom = '0';
-      oldest.style.transform = 'translateY(-10px)';
-    }); });
-    setTimeout(function(el){
-      if (linesEl.contains(el)){ linesEl.removeChild(el); reclassLines(); }
-    }.bind(null, oldest), 850);
+    linesEl.removeChild(linesEl.firstChild);
   }
 
   reclassLines();
+
+  // Measure new height
+  var newHeight = linesEl.offsetHeight;
+  var diff = newHeight - prevHeight;
+
+  // Snap container down by the diff, then animate back up — whole block moves together
+  linesEl.style.transition = 'none';
+  linesEl.style.transform = 'translateY(' + diff + 'px)';
+
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){
+    linesEl.style.transition = 'transform 0.7s ease';
+    linesEl.style.transform = 'translateY(0)';
+    div.style.opacity = '1';
+  }); });
+
   if (!skipFirebase) translationsRef.push({ text:text, timestamp:firebase.database.ServerValue.TIMESTAMP });
   return div;
 }
