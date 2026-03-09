@@ -159,46 +159,36 @@ function displayFinalLine(text, skipFirebase){
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
 
-  // If the last line is short, merge into it instead of adding a new line
+  // Merge into last line if it's short
   var lastLine = linesEl.lastChild;
   if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
     var merged = lastLine.textContent + ' ' + text;
-    lastLine.style.opacity = '0.4';
+    lastLine.style.opacity = '0.5';
     setTimeout(function(){ lastLine.textContent = merged; lastLine.style.opacity = '1'; }, 200);
     if (!skipFirebase) translationsRef.push({ text: merged, timestamp: firebase.database.ServerValue.TIMESTAMP });
     reclassLines();
     return lastLine;
   }
 
-  // Measure current height before adding new line
-  var prevHeight = linesEl.offsetHeight;
-
-  // Add new line (invisible, no transform — it just appears in place)
+  // Add new line — start white immediately, no opacity flash
   var div = document.createElement('div');
   div.className = 'tline newest';
   div.textContent = text;
-  div.style.opacity = '0';
   linesEl.appendChild(div);
 
-  // Remove oldest if over MAX_LINES (instant, before animation)
+  // Remove oldest if over MAX_LINES
   while (linesEl.children.length > MAX_LINES) {
     linesEl.removeChild(linesEl.firstChild);
   }
-
   reclassLines();
 
-  // Measure new height
-  var newHeight = linesEl.offsetHeight;
-  var diff = newHeight - prevHeight;
-
-  // Snap container down by the diff, then animate back up — whole block moves together
+  // Slide entire block up by one line height
+  var lineH = div.offsetHeight + 14; // 14px = gap
   linesEl.style.transition = 'none';
-  linesEl.style.transform = 'translateY(' + diff + 'px)';
-
+  linesEl.style.transform = 'translateY(' + lineH + 'px)';
   requestAnimationFrame(function(){ requestAnimationFrame(function(){
-    linesEl.style.transition = 'transform 0.7s ease';
+    linesEl.style.transition = 'transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
     linesEl.style.transform = 'translateY(0)';
-    div.style.opacity = '1';
   }); });
 
   if (!skipFirebase) translationsRef.push({ text:text, timestamp:firebase.database.ServerValue.TIMESTAMP });
