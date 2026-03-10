@@ -20,24 +20,29 @@
   #status.translating { color: #aaaaaa; }
   #status.error { color: #e74c3c; }
   #error-box { display: none; background: #1a0000; border: 1px solid #500; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #ff6b6b; margin: 6px 20px; font-family: monospace; word-break: break-all; flex-shrink: 0; }
+
   #display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 40px; position: relative; overflow: hidden; }
   #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
   #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
+
   #translation-box { width: 100%; max-width: 1200px; text-align: center; }
-  #translation-lines { display: flex; flex-direction: column; gap: 14px; margin-bottom: 12px; }
+
+  /* Viewport clips the scrolling lines — overflow hidden is essential */
+  #translation-viewport { overflow: hidden; position: relative; }
+
+  /* Lines stack naturally inside — no transitions on the container itself */
+  #translation-lines { display: flex; flex-direction: column; gap: 14px; }
+
   .tline {
     font-size: clamp(18px, 2.5vw, 36px);
     line-height: 1.4;
     text-shadow: 0 2px 20px rgba(0,0,0,0.8);
-    overflow: hidden;
-    transition: color 0.8s, opacity 0.8s, transform 0.8s ease, max-height 0.8s ease, margin 0.8s ease;
+    flex-shrink: 0;
+    transition: color 0.6s, opacity 0.6s;
   }
   .tline.newest { color: #ffffff; }
   .tline.oldest { color: #555555; }
-  #streaming-line { font-size: clamp(18px,2.5vw,36px); line-height: 1.4; color: #aaaaaa; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.4em; transition: opacity 0.3s; }
-  #streaming-line.empty { opacity: 0; }
-  #streaming-cursor { display: inline-block; width: 3px; height: 0.85em; background: #aaaaaa; vertical-align: text-bottom; margin-left: 3px; animation: blink 0.7s infinite; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
   #interim-text { font-size: clamp(11px,1.2vw,16px); color: #333; margin-top: 12px; font-style: italic; min-height: 1.2em; font-family: sans-serif; }
   #debug-badge { position: fixed; bottom: 24px; left: 20px; font-size: 11px; font-family: monospace; color: #555; background: #111; padding: 4px 8px; border-radius: 4px; border: 1px solid #222; pointer-events: none; }
   #mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; }
@@ -60,9 +65,8 @@
 <div id="display">
   <div id="placeholder"><h1>CHIU YANG CHURCH</h1></div>
   <div id="translation-box">
-    <div id="translation-lines"></div>
-    <div id="streaming-line" class="empty">
-      <span id="streaming-text"></span><span id="streaming-cursor" style="display:none"></span>
+    <div id="translation-viewport">
+      <div id="translation-lines"></div>
     </div>
     <div id="interim-text"></div>
   </div>
@@ -71,11 +75,11 @@
 <div id="debug-badge">ready</div>
 
 <script>
-var WORKER_URL = 'https://live-translation.pauljkim22.workers.dev';
-var SILENCE_MS = 4500;
-var MAX_CHARS  = 120;
-var MAX_LINES  = 5;
-var SHORT_LINE_CHARS = 60; // lines shorter than this get merged with the next
+var WORKER_URL  = 'https://live-translation.pauljkim22.workers.dev';
+var SILENCE_MS  = 4500;
+var MAX_CHARS   = 120;
+var MAX_LINES   = 5;
+var SHORT_LINE_CHARS = 60;
 
 var firebaseConfig = {
   apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
@@ -97,7 +101,6 @@ if (!isOperator) {
   document.addEventListener('DOMContentLoaded', function() {
     $('controls').style.display = 'none';
     $('error-box').style.display = 'none';
-    $('streaming-line').style.display = 'none';
     $('interim-text').style.display = 'none';
     $('debug-badge').style.display = 'none';
     var seenKeys = new Set();
@@ -130,7 +133,6 @@ var isListening   = false;
 var silenceTimer  = null;
 var isTranslating = false;
 var historyLog    = [];
-var currentStreamText = '';
 var fullTranscript = '';
 var cursor         = 0;
 
@@ -150,95 +152,74 @@ function reclassLines(){
   all.forEach(function(el, i){
     el.classList.remove('newest','oldest');
     var fromBottom = all.length - 1 - i;
-    if (fromBottom <= 2) el.classList.add('newest'); // bottom 3 white
-    else el.classList.add('oldest');                  // top ones gray
+    if (fromBottom <= 2) el.classList.add('newest');
+    else el.classList.add('oldest');
   });
 }
 
-function displayFinalLine(text, skipFirebase){
-  $('placeholder').style.display = 'none';
-  var linesEl = $('translation-lines');
-  var viewport = $('translation-viewport');
-
-  // Merge into last line if it's short
-  var lastLine = linesEl.lastChild;
-  if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
-    var merged = lastLine.textContent + ' ' + text;
-    lastLine.style.opacity = '0.5';
-    setTimeout(function(){ lastLine.textContent = merged; lastLine.style.opacity = '1'; }, 200);
-    if (!skipFirebase) translationsRef.push({ text: merged, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    reclassLines();
-    return lastLine;
-  }
-
-  // Add new line at bottom
-  var div = document.createElement('div');
-  div.className = 'tline newest';
-  div.textContent = text;
-  linesEl.appendChild(div);
-
-  // Remove oldest lines beyond MAX_LINES
-  while (linesEl.children.length > MAX_LINES) {
-    linesEl.removeChild(linesEl.firstChild);
-  }
-  reclassLines();
-
-  // Size viewport to show exactly MAX_LINES worth of content
-  // then smoothly scroll it to show the latest
-  var lineH = div.offsetHeight;
-  var gap = 14;
-  var visibleH = (lineH + gap) * MAX_LINES - gap;
-  viewport.style.height = visibleH + 'px';
-
-  // Smooth scroll the viewport to bottom
-  var targetScroll = linesEl.scrollHeight - visibleH;
-  if (targetScroll > 0) {
-    smoothScroll(viewport, viewport.scrollTop, targetScroll, 700);
-  }
-
-  if (!skipFirebase) translationsRef.push({ text:text, timestamp:firebase.database.ServerValue.TIMESTAMP });
-  return div;
-}
-
-function pushHistory(text){
-  historyLog.push(text);
-  if (historyLog.length > 6) historyLog.shift();
-}
-
-function afterTranslation(){
-  var unsent = fullTranscript.slice(cursor).trim();
-  if (unsent.length > 10){
-    cursor = fullTranscript.length;
-    $('interim-text').textContent = '';
-    triggerTranslation(unsent);
-  }
-}
-
-function smoothScroll(el, from, to, duration) {
-  var start = performance.now();
+// Smooth scroll using requestAnimationFrame with ease-in-out cubic
+function smoothScrollTo(el, target, duration) {
+  var start = el.scrollTop;
+  var delta = target - start;
+  if (Math.abs(delta) < 1) return;
+  var startTime = null;
   function step(now) {
-    var elapsed = now - start;
+    if (!startTime) startTime = now;
+    var elapsed = now - startTime;
     var progress = Math.min(elapsed / duration, 1);
-    // ease in-out cubic
     var ease = progress < 0.5
       ? 4 * progress * progress * progress
       : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-    el.scrollTop = from + (to - from) * ease;
+    el.scrollTop = start + delta * ease;
     if (progress < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 
-function setStreamingText(text){
-  var el=$('streaming-line'), t=$('streaming-text'), cur=$('streaming-cursor');
-  if(!text){ el.classList.add('empty'); t.textContent=''; cur.style.display='none'; }
-  else { $('placeholder').style.display='none'; el.classList.remove('empty'); t.textContent=text; cur.style.display='inline-block'; }
+function displayFinalLine(text, skipFirebase) {
+  $('placeholder').style.display = 'none';
+  var linesEl   = $('translation-lines');
+  var viewport  = $('translation-viewport');
+
+  // Merge into last line if it's short
+  var lastLine = linesEl.lastChild;
+  if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
+    lastLine.textContent = lastLine.textContent + ' ' + text;
+    reclassLines();
+    if (!skipFirebase) translationsRef.push({ text: lastLine.textContent, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    return lastLine;
+  }
+
+  // Add new line
+  var div = document.createElement('div');
+  div.className = 'tline newest';
+  div.textContent = text;
+  linesEl.appendChild(div);
+
+  // Remove oldest beyond MAX_LINES
+  while (linesEl.children.length > MAX_LINES) {
+    linesEl.removeChild(linesEl.firstChild);
+  }
+  reclassLines();
+
+  // Size the viewport to exactly fit MAX_LINES
+  // We do this every time in case font size changed
+  var lineH = div.offsetHeight;
+  var gap   = 14;
+  var visH  = lineH * MAX_LINES + gap * (MAX_LINES - 1);
+  viewport.style.height = visH + 'px';
+
+  // Smooth scroll to bottom
+  smoothScrollTo(viewport, linesEl.scrollHeight, 700);
+
+  if (!skipFirebase) translationsRef.push({ text: text, timestamp: firebase.database.ServerValue.TIMESTAMP });
+  return div;
 }
 
 function clearTranslations(){
   translationsRef.remove();
   $('translation-lines').innerHTML = '';
-  setStreamingText('');
+  $('translation-viewport').style.height = '';
   fullTranscript = ''; cursor = 0;
   $('placeholder').style.display = 'block';
 }
@@ -251,8 +232,7 @@ function startListening(){
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SR){ showError('Please use Google Chrome.'); return; }
   isListening = true;
-  fullTranscript = '';
-  cursor = 0;
+  fullTranscript = ''; cursor = 0;
   $('startBtn').textContent = '■ Stop';
   $('startBtn').classList.add('active');
   $('mic-indicator').classList.add('active');
@@ -273,18 +253,12 @@ function spawnRec(){
     for (var i = 0; i < e.results.length; i++) full += e.results[i][0].transcript;
     full = full.trim();
     fullTranscript = full;
-
     var unsent = full.slice(cursor).trim();
     $('interim-text').textContent = unsent ? '"' + unsent + '"' : '';
     dbg('total:' + full.length + ' cursor:' + cursor + ' unsent:' + unsent.length);
-
     if (!unsent) return;
     clearTimeout(silenceTimer);
-
-    if (unsent.length >= MAX_CHARS){
-      commitTranslation();
-      return;
-    }
+    if (unsent.length >= MAX_CHARS){ commitTranslation(); return; }
     silenceTimer = setTimeout(commitTranslation, SILENCE_MS);
   };
 
@@ -295,7 +269,6 @@ function spawnRec(){
 
   rec.onend = function(){
     if (!isListening) return;
-    // Reset transcript on restart since Chrome starts fresh
     fullTranscript = ''; cursor = 0;
     setTimeout(spawnRec, 150);
   };
@@ -304,8 +277,7 @@ function spawnRec(){
 }
 
 function commitTranslation(){
-  clearTimeout(silenceTimer);
-  silenceTimer = null;
+  clearTimeout(silenceTimer); silenceTimer = null;
   if (isTranslating) return;
   var unsent = fullTranscript.slice(cursor).trim();
   if (!unsent) return;
@@ -327,17 +299,17 @@ function stopListening(){
 }
 
 // ── TRANSLATION ──────────────────────────────
-// Non-streaming: waits for clean result, then shows it once — no draft/revision flicker
+// Non-streaming: waits for complete result, shows it once, never changes it
 async function triggerTranslation(text){
   if (isTranslating) return;
   isTranslating = true;
-  currentStreamText = '';
   setStatus('Translating…', 'translating');
   clearError();
 
   var safetyTimeout = setTimeout(function(){
     if (!isTranslating) return;
-    isTranslating = false; setStatus('🎤 Listening…', 'listening');
+    isTranslating = false;
+    setStatus('🎤 Listening…', 'listening');
     afterTranslation();
   }, 15000);
 
@@ -355,7 +327,7 @@ async function triggerTranslation(text){
         model: 'claude-sonnet-4-5',
         max_tokens: 200,
         stream: false,
-        system: 'You are a live interpreter for a Korean Christian worship service. Translate the Korean into clear, natural English. Aim for 1-2 complete sentences that flow naturally. Capture the full meaning with simple, reverent language. Infer omitted subjects from context. Speech recognition often mishears Korean Bible book names — correct them using context (e.g. 사사기=Judges, 열왕기=Kings, 이사야=Isaiah).\n\nCommon Korean Bible books: 창세기(Genesis) 출애굽기(Exodus) 레위기(Leviticus) 민수기(Numbers) 신명기(Deuteronomy) 여호수아(Joshua) 사사기(Judges) 룻기(Ruth) 사무엘상하(1-2Samuel) 열왕기상하(1-2Kings) 역대상하(1-2Chronicles) 에스라(Ezra) 느헤미야(Nehemiah) 에스더(Esther) 욥기(Job) 시편(Psalms) 잠언(Proverbs) 전도서(Ecclesiastes) 이사야(Isaiah) 예레미야(Jeremiah) 에스겔(Ezekiel) 다니엘(Daniel) 마태복음(Matthew) 마가복음(Mark) 누가복음(Luke) 요한복음(John) 사도행전(Acts) 로마서(Romans) 고린도전후서(1-2Corinthians) 갈라디아서(Galatians) 에베소서(Ephesians) 빌립보서(Philippians) 골로새서(Colossians) 히브리서(Hebrews) 야고보서(James) 요한계시록(Revelation)\n\nRespond with ONLY the translation, nothing else.',
+        system: 'You are a live interpreter for a Korean Christian worship service. Translate the Korean into clear, natural English. Aim for 1-2 complete sentences that flow naturally. Capture the full meaning with simple, reverent language. Infer omitted subjects from context.\n\nSpeech recognition often mishears Korean Bible book names — correct them using context.\nKorean Bible books: 창세기(Genesis) 출애굽기(Exodus) 레위기(Leviticus) 민수기(Numbers) 신명기(Deuteronomy) 여호수아(Joshua) 사사기(Judges) 룻기(Ruth) 사무엘상하(1-2Samuel) 열왕기상하(1-2Kings) 역대상하(1-2Chronicles) 에스라(Ezra) 느헤미야(Nehemiah) 에스더(Esther) 욥기(Job) 시편(Psalms) 잠언(Proverbs) 전도서(Ecclesiastes) 이사야(Isaiah) 예레미야(Jeremiah) 에스겔(Ezekiel) 다니엘(Daniel) 호세아(Hosea) 요엘(Joel) 아모스(Amos) 요나(Jonah) 미가(Micah) 말라기(Malachi) 마태복음(Matthew) 마가복음(Mark) 누가복음(Luke) 요한복음(John) 사도행전(Acts) 로마서(Romans) 고린도전후서(1-2Corinthians) 갈라디아서(Galatians) 에베소서(Ephesians) 빌립보서(Philippians) 골로새서(Colossians) 히브리서(Hebrews) 야고보서(James) 베드로전후서(1-2Peter) 요한계시록(Revelation)\n\nRespond with ONLY the translation, nothing else.',
         messages: [{ role: 'user', content: sermonLine + contextStr + 'Translate:\n' + text }]
       })
     });
@@ -373,8 +345,8 @@ async function triggerTranslation(text){
 
     if (result){
       displayFinalLine(result);
-      pushHistory(result);
-      translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
+      historyLog.push(result);
+      if (historyLog.length > 6) historyLog.shift();
     }
 
     isTranslating = false;
@@ -385,7 +357,17 @@ async function triggerTranslation(text){
   } catch(err){
     clearTimeout(safetyTimeout);
     if (err.name !== 'AbortError') showError('Network error: ' + err.message);
-    isTranslating = false; afterTranslation();
+    isTranslating = false;
+    afterTranslation();
+  }
+}
+
+function afterTranslation(){
+  var unsent = fullTranscript.slice(cursor).trim();
+  if (unsent.length > 10){
+    cursor = fullTranscript.length;
+    $('interim-text').textContent = '';
+    triggerTranslation(unsent);
   }
 }
 </script>
