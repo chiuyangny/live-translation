@@ -68,10 +68,11 @@
 // ── CONFIG ───────────────────────────────────────────────────────────────────
 var WORKER_URL       = 'https://live-translation.pauljkim22.workers.dev';
 var MODEL            = 'claude-sonnet-4-6';  // pin this — update manually if needed
-var SILENCE_MS       = 4500;  // ms of silence before committing a chunk
-var MAX_CHARS        = 50;    // Korean chars before force-committing
-var MAX_LINES        = 5;     // max lines visible on screen
-var SHORT_LINE_CHARS = 60;    // merge into previous line if shorter than this
+var SILENCE_MS       = 4500;   // ms of silence before committing a chunk
+var MAX_CHARS        = 50;     // Korean chars before force-committing
+var FORCE_COMMIT_MS  = 8000;   // hard commit every N ms during continuous speech
+var MAX_LINES        = 5;      // max lines visible on screen
+var SHORT_LINE_CHARS = 60;     // merge into previous line if shorter than this
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
@@ -126,16 +127,17 @@ if (!isOperator) {
 var rec                  = null;
 var isListening          = false;
 var silenceTimer         = null;
+var forceCommitTimer     = null;
+var watchdogTimer        = null;
 var isTranslating        = false;
 var translationQueue     = [];
 var historyLog           = [];
-var autoSermonContext    = '';   // auto-built running context summary
+var autoSermonContext     = '';
 var contextUpdateCounter = 0;
 var fullTranscript       = '';
 var cursor               = 0;
 var lastFirebaseKey      = null;
 var lastActivityTime     = 0;
-var watchdogTimer        = null;
 
 // ── UI HELPERS ───────────────────────────────────────────────────────────────
 function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
@@ -245,6 +247,16 @@ function startWatchdog() {
   }, 3000);
 }
 
+function scheduleForceCommit() {
+  clearTimeout(forceCommitTimer);
+  forceCommitTimer = setTimeout(function forceNext() {
+    if (!isListening) return;
+    var unsent = fullTranscript.slice(cursor).trim();
+    if (unsent) commitTranslation();
+    forceCommitTimer = setTimeout(forceNext, FORCE_COMMIT_MS);
+  }, FORCE_COMMIT_MS);
+}
+
 function spawnRec() {
   if (!isListening) return;
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -252,6 +264,7 @@ function spawnRec() {
   rec.lang = 'ko-KR';
   rec.continuous = true;
   rec.interimResults = true;
+  scheduleForceCommit();
 
   rec.onresult = function (e) {
     lastActivityTime = Date.now();
@@ -261,8 +274,6 @@ function spawnRec() {
       if (e.results[i].isFinal) full += e.results[i][0].transcript;
       else interimText += e.results[i][0].transcript;
     }
-    // Use all text (final + interim) for length tracking and commits
-    // so chunks stay small during continuous speech
     fullTranscript = (full + interimText).trim();
 
     var unsent = fullTranscript.slice(cursor).trim();
@@ -302,6 +313,7 @@ function commitTranslation() {
   if (!unsent) return;
   cursor = fullTranscript.length;
   $('interim-text').textContent = '';
+  scheduleForceCommit(); // reset the force commit timer after each commit
   enqueueTranslation(unsent);
 }
 
@@ -317,8 +329,9 @@ function processQueue() {
 
 function stopListening() {
   isListening = false;
-  clearTimeout(silenceTimer); silenceTimer = null;
-  clearInterval(watchdogTimer); watchdogTimer = null;
+  clearTimeout(silenceTimer);    silenceTimer = null;
+  clearTimeout(forceCommitTimer); forceCommitTimer = null;
+  clearInterval(watchdogTimer);  watchdogTimer = null;
   if (rec) { try { rec.onend = null; rec.stop(); } catch (e) {} rec = null; }
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
