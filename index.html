@@ -9,6 +9,7 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0a0a0a; color: #f0f0f0; font-family: 'Georgia', serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
   #controls { background: #111; border-bottom: 1px solid #222; padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
   input[type="text"] { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; color: #f0f0f0; padding: 6px 10px; font-size: 13px; width: 260px; }
   button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; font-weight: 600; }
@@ -21,42 +22,55 @@
   #status.error { color: #e74c3c; }
   #error-box { display: none; background: #1a0000; border: 1px solid #500; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #ff6b6b; margin: 6px 20px; font-family: monospace; word-break: break-all; flex-shrink: 0; }
 
-  #display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 40px 36px; position: relative; overflow: hidden; }
-  #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
-  #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
-
-  #translation-box { width: 100%; max-width: 1200px; text-align: center; }
-
-  /* The viewport masks everything outside MAX_LINES worth of height */
-  #translation-viewport {
-    overflow: hidden;
-    position: relative;
-  }
-
-  /* Lines live here; we slide this container up via transform */
-  #translation-lines {
+  /* Display takes all remaining space, lines anchor to bottom */
+  #display {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    /* transition applied in JS after first line exists */
+    justify-content: flex-end;
+    align-items: center;
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #placeholder {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #2a2a2a;
+    pointer-events: none;
+    transition: opacity 0.5s;
+  }
+  #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
+
+  /* Lines stack naturally at the bottom — no fixed height needed */
+  #translation-lines {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
   }
 
   .tline {
     font-size: clamp(18px, 2.5vw, 36px);
-    line-height: 1.4;
+    line-height: 1.45;
     text-shadow: 0 2px 20px rgba(0,0,0,0.8);
-    flex-shrink: 0;
-    /* new lines slide+fade in */
+    /* start invisible & shifted down */
     opacity: 0;
-    transform: translateY(20px);
-    transition: opacity 0.5s ease, transform 0.5s ease, color 0.8s ease;
+    transform: translateY(24px);
+    transition: opacity 0.5s ease, transform 0.5s ease, color 1s ease;
   }
-  .tline.visible  { opacity: 1; transform: translateY(0); }
-  .tline.newest   { color: #ffffff; }
-  .tline.mid      { color: #aaaaaa; }
-  .tline.oldest   { color: #555555; }
+  .tline.show   { opacity: 1; transform: translateY(0); }
+  .tline.newest { color: #ffffff; }
+  .tline.mid    { color: #999999; }
+  .tline.oldest { color: #444444; }
 
-  #interim-text { font-size: clamp(11px,1.2vw,16px); color: #333; margin-top: 12px; font-style: italic; min-height: 1.2em; font-family: sans-serif; }
+  #interim-text { font-size: clamp(11px,1.2vw,16px); color: #2a2a2a; margin-top: 14px; font-style: italic; min-height: 1.2em; font-family: sans-serif; text-align: center; width: 100%; max-width: 1200px; }
+
   #debug-badge { position: fixed; bottom: 24px; left: 20px; font-size: 11px; font-family: monospace; color: #555; background: #111; padding: 4px 8px; border-radius: 4px; border: 1px solid #222; pointer-events: none; }
   #mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; }
   #mic-indicator.active { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; animation: pulse 1.5s infinite; }
@@ -68,31 +82,26 @@
 <div id="controls">
   <label style="font-size:13px;color:#888;">Sermon topic:</label>
   <input type="text" id="sermonContext" placeholder="e.g. John 3:16, faith, grace" />
-  <button id="startBtn" onclick="toggleListening()">▶ Start</button>
-  <button id="clearBtn" onclick="clearTranslations()" style="background:#555;color:#ccc;">⌫ Clear</button>
+  <button id="startBtn" onclick="toggleListening()">&#9654; Start</button>
+  <button id="clearBtn" onclick="clearTranslations()" style="background:#555;color:#ccc;">&#9003; Clear</button>
   <span id="status">Ready</span>
-  <button id="fullscreenBtn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+  <button id="fullscreenBtn" onclick="toggleFullscreen()">&#9974; Fullscreen</button>
 </div>
 <div id="error-box"></div>
 
 <div id="display">
   <div id="placeholder"><h1>CHIU YANG CHURCH</h1></div>
-  <div id="translation-box">
-    <div id="translation-viewport">
-      <div id="translation-lines"></div>
-    </div>
-    <div id="interim-text"></div>
-  </div>
+  <div id="translation-lines"></div>
+  <div id="interim-text"></div>
 </div>
 <div id="mic-indicator"></div>
 <div id="debug-badge">ready</div>
 
 <script>
-var WORKER_URL  = 'https://live-translation.pauljkim22.workers.dev';
-var SILENCE_MS  = 1500;   // 1.5s silence — faster commits
-var MAX_CHARS   = 35;     // smaller chunks — more frequent lines
-var MAX_LINES   = 5;
-var LINE_GAP    = 14;     // must match CSS gap
+var WORKER_URL = 'https://live-translation.pauljkim22.workers.dev';
+var SILENCE_MS = 1200;   // commit after 1.2s silence
+var MAX_CHARS  = 30;     // hard-trigger at 30 chars
+var MAX_LINES  = 5;
 
 var firebaseConfig = {
   apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
@@ -109,66 +118,11 @@ var translationsRef = db.ref('translations');
 var isOperator = window.location.search.includes('operator');
 function $(id){ return document.getElementById(id); }
 
-// ── VIEWPORT SIZING ──────────────────────────
-// We keep the viewport exactly tall enough for MAX_LINES.
-// The translation-lines div can be taller; it's clipped.
-// We shift translation-lines upward with translateY so the
-// newest lines are always at the bottom of the viewport.
-
-var lineHeightCache = 0;
-
-function getLineH() {
-  // measure from an existing line, or estimate
-  var lines = $('translation-lines').querySelectorAll('.tline');
-  if (lines.length > 0) {
-    lineHeightCache = lines[0].offsetHeight;
-  }
-  return lineHeightCache || Math.round(clamp(18, 2.5 * window.innerWidth / 100, 36) * 1.4);
-}
-
-function clamp(min, val, max) { return Math.min(Math.max(val, min), max); }
-
-function recomputeViewport() {
-  var lineH = getLineH();
-  var visH  = lineH * MAX_LINES + LINE_GAP * (MAX_LINES - 1);
-  $('translation-viewport').style.height = visH + 'px';
-  repositionLines();
-}
-
-function repositionLines(animate) {
-  var linesEl  = $('translation-lines');
-  var lineH    = getLineH();
-  var total    = linesEl.children.length;
-  // total content height
-  var contentH = total * lineH + Math.max(0, total - 1) * LINE_GAP;
-  var visH     = lineH * MAX_LINES + LINE_GAP * (MAX_LINES - 1);
-  // shift up so bottom of content aligns with bottom of viewport
-  var shift    = Math.max(0, contentH - visH);
-
-  if (animate) {
-    linesEl.style.transition = 'transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-  } else {
-    linesEl.style.transition = 'none';
-  }
-  linesEl.style.transform = 'translateY(-' + shift + 'px)';
-}
-
-function reclassLines() {
-  var all = $('translation-lines').querySelectorAll('.tline');
-  all.forEach(function(el, i) {
-    el.classList.remove('newest', 'mid', 'oldest');
-    var fromBottom = all.length - 1 - i;
-    if (fromBottom === 0)      el.classList.add('newest');
-    else if (fromBottom <= 2)  el.classList.add('mid');
-    else                       el.classList.add('oldest');
-  });
-}
-
-// ── VIEWER ──────────────────────────────────
+// ── VIEWER ───────────────────────────────────
 if (!isOperator) {
   document.addEventListener('DOMContentLoaded', function() {
-    $('controls').style.display   = 'none';
-    $('error-box').style.display  = 'none';
+    $('controls').style.display    = 'none';
+    $('error-box').style.display   = 'none';
     $('interim-text').style.display = 'none';
     $('debug-badge').style.display  = 'none';
     var seenKeys = new Set();
@@ -188,63 +142,62 @@ if (!isOperator) {
     translationsRef.on('value', function(snap) {
       if (!snap.val()) {
         $('translation-lines').innerHTML = '';
-        $('translation-viewport').style.height = '';
-        $('placeholder').style.display = 'block';
+        $('placeholder').style.opacity = '1';
         seenKeys.clear();
       }
     });
   });
 }
 
-// ── OPERATOR STATE ───────────────────────────
-var rec           = null;
-var isListening   = false;
-var silenceTimer  = null;
-var isTranslating = false;
-var historyLog    = [];
-var fullTranscript = '';
-var cursor         = 0;
+// ── OPERATOR STATE ────────────────────────────
+var rec = null, isListening = false, silenceTimer = null;
+var isTranslating = false, historyLog = [];
+var fullTranscript = '', cursor = 0;
 
-// ── UI HELPERS ───────────────────────────────
+// ── UI ────────────────────────────────────────
 function showError(msg){ $('error-box').style.display='block'; $('error-box').textContent=msg; setStatus('Error','error'); }
-function clearError()  { $('error-box').style.display='none'; }
+function clearError(){ $('error-box').style.display='none'; }
 function setStatus(msg,cls){ $('status').textContent=msg; $('status').className=cls||''; }
 function dbg(msg){ var el=$('debug-badge'); if(el) el.textContent=msg; }
-
 function toggleFullscreen(){
   if (!document.fullscreenElement){ document.documentElement.requestFullscreen(); $('controls').style.display='none'; }
   else { document.exitFullscreen(); $('controls').style.display='flex'; }
 }
 
-// ── DISPLAY LINE ─────────────────────────────
-function displayFinalLine(text, skipFirebase) {
-  $('placeholder').style.display = 'none';
-  var linesEl = $('translation-lines');
+// ── DISPLAY ───────────────────────────────────
+function reclassLines() {
+  var all = $('translation-lines').querySelectorAll('.tline');
+  all.forEach(function(el, i) {
+    el.classList.remove('newest','mid','oldest');
+    var fromBottom = all.length - 1 - i;
+    if (fromBottom === 0)     el.classList.add('newest');
+    else if (fromBottom <= 2) el.classList.add('mid');
+    else                      el.classList.add('oldest');
+  });
+}
 
-  // create line (starts invisible, slides in)
+function displayFinalLine(text, skipFirebase) {
+  $('placeholder').style.opacity = '0';
+
+  var linesEl = $('translation-lines');
   var div = document.createElement('div');
   div.className = 'tline';
   div.textContent = text;
   linesEl.appendChild(div);
 
-  // prune old lines beyond MAX_LINES
+  // prune oldest beyond MAX_LINES — fade them out first
   while (linesEl.children.length > MAX_LINES) {
-    linesEl.removeChild(linesEl.firstChild);
+    var old = linesEl.firstChild;
+    old.style.transition = 'opacity 0.3s';
+    old.style.opacity = '0';
+    setTimeout(function(el){ el.parentNode && el.parentNode.removeChild(el); }, 300, old);
   }
 
   reclassLines();
 
-  // size viewport once we have a line height to measure
-  recomputeViewport();
-
-  // slide the container up smoothly
-  repositionLines(true);
-
-  // trigger slide-in of the new line on next frame
-  requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      div.classList.add('visible');
-    });
+  // slide new line in on next paint
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){ div.classList.add('show'); });
   });
 
   if (!skipFirebase) {
@@ -255,26 +208,22 @@ function displayFinalLine(text, skipFirebase) {
 function clearTranslations(){
   translationsRef.remove();
   $('translation-lines').innerHTML = '';
-  $('translation-lines').style.transform = '';
-  $('translation-viewport').style.height = '';
+  $('placeholder').style.opacity = '1';
   fullTranscript = ''; cursor = 0;
-  lineHeightCache = 0;
-  $('placeholder').style.display = 'block';
 }
 
-// ── SPEECH RECOGNITION ───────────────────────
+// ── SPEECH ────────────────────────────────────
 function toggleListening(){ if(isListening) stopListening(); else startListening(); }
 
 function startListening(){
   clearError();
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SR){ showError('Please use Google Chrome.'); return; }
-  isListening = true;
-  fullTranscript = ''; cursor = 0;
-  $('startBtn').textContent = '■ Stop';
+  isListening = true; fullTranscript = ''; cursor = 0;
+  $('startBtn').textContent = '\u25a0 Stop';
   $('startBtn').classList.add('active');
   $('mic-indicator').classList.add('active');
-  setStatus('🎤 Listening…', 'listening');
+  setStatus('\ud83c\udfa4 Listening\u2026', 'listening');
   spawnRec();
 }
 
@@ -282,18 +231,15 @@ function spawnRec(){
   if (!isListening) return;
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   rec = new SR();
-  rec.lang = 'ko-KR';
-  rec.continuous = true;
-  rec.interimResults = true;
+  rec.lang = 'ko-KR'; rec.continuous = true; rec.interimResults = true;
 
   rec.onresult = function(e){
     var full = '';
     for (var i = 0; i < e.results.length; i++) full += e.results[i][0].transcript;
-    full = full.trim();
-    fullTranscript = full;
+    full = full.trim(); fullTranscript = full;
     var unsent = full.slice(cursor).trim();
-    $('interim-text').textContent = unsent ? '"' + unsent + '"' : '';
-    dbg('total:' + full.length + ' cursor:' + cursor + ' unsent:' + unsent.length);
+    $('interim-text').textContent = unsent ? '\u201c' + unsent + '\u201d' : '';
+    dbg('unsent:' + unsent.length + ' cursor:' + cursor);
     if (!unsent) return;
     clearTimeout(silenceTimer);
     if (unsent.length >= MAX_CHARS){ commitTranslation(); return; }
@@ -325,10 +271,9 @@ function commitTranslation(){
 }
 
 function stopListening(){
-  isListening = false;
-  clearTimeout(silenceTimer); silenceTimer = null;
+  isListening = false; clearTimeout(silenceTimer); silenceTimer = null;
   if (rec){ try{ rec.onend=null; rec.stop(); }catch(e){} rec=null; }
-  $('startBtn').textContent = '▶ Start';
+  $('startBtn').textContent = '\u25ba Start';
   $('startBtn').classList.remove('active');
   $('mic-indicator').classList.remove('active');
   $('interim-text').textContent = '';
@@ -336,82 +281,49 @@ function stopListening(){
   setStatus('Stopped');
 }
 
-// ── TRANSLATION ──────────────────────────────
+// ── TRANSLATION ───────────────────────────────
 async function triggerTranslation(text){
   if (isTranslating) return;
-  isTranslating = true;
-  setStatus('Translating…', 'translating');
-  clearError();
+  isTranslating = true; setStatus('Translating\u2026','translating'); clearError();
 
-  var safetyTimeout = setTimeout(function(){
+  var safety = setTimeout(function(){
     if (!isTranslating) return;
-    isTranslating = false;
-    setStatus('🎤 Listening…', 'listening');
-    afterTranslation();
+    isTranslating = false; setStatus('\ud83c\udfa4 Listening\u2026','listening'); afterTranslation();
   }, 15000);
 
-  var sermonContext = $('sermonContext').value.trim();
-  var sermonLine = sermonContext ? 'Sermon topic: ' + sermonContext + '\n\n' : '';
-  var contextStr = historyLog.length
-    ? 'Recent:\n' + historyLog.slice(-2).map(function(h){ return 'EN: '+h; }).join('\n') + '\n\n'
-    : '';
+  var ctx    = $('sermonContext').value.trim();
+  var prompt = (ctx ? 'Sermon topic: ' + ctx + '\n\n' : '')
+             + (historyLog.length ? 'Recent:\n' + historyLog.slice(-2).map(function(h){ return 'EN: '+h; }).join('\n') + '\n\n' : '')
+             + 'Translate:\n' + text;
 
   try {
     var res = await fetch(WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 200,
-        stream: false,
-        system: 'You are a live interpreter for a Korean Christian worship service. Translate the Korean into clear, natural English. Aim for 1-2 short sentences. Keep output concise — this is displayed live on screen. Capture the full meaning with simple, reverent language. Infer omitted subjects from context.\n\nSpeech recognition often mishears Korean Bible book names — correct them using context.\nKorean Bible books: 창세기(Genesis) 출애굽기(Exodus) 레위기(Leviticus) 민수기(Numbers) 신명기(Deuteronomy) 여호수아(Joshua) 사사기(Judges) 룻기(Ruth) 사무엘상하(1-2Samuel) 열왕기상하(1-2Kings) 역대상하(1-2Chronicles) 에스라(Ezra) 느헤미야(Nehemiah) 에스더(Esther) 욥기(Job) 시편(Psalms) 잠언(Proverbs) 전도서(Ecclesiastes) 이사야(Isaiah) 예레미야(Jeremiah) 에스겔(Ezekiel) 다니엘(Daniel) 호세아(Hosea) 요엘(Joel) 아모스(Amos) 요나(Jonah) 미가(Micah) 말라기(Malachi) 마태복음(Matthew) 마가복음(Mark) 누가복음(Luke) 요한복음(John) 사도행전(Acts) 로마서(Romans) 고린도전후서(1-2Corinthians) 갈라디아서(Galatians) 에베소서(Ephesians) 빌립보서(Philippians) 골로새서(Colossians) 히브리서(Hebrews) 야고보서(James) 베드로전후서(1-2Peter) 요한계시록(Revelation)\n\nRespond with ONLY the translation, nothing else.',
-        messages: [{ role: 'user', content: sermonLine + contextStr + 'Translate:\n' + text }]
+        model: 'claude-sonnet-4-5', max_tokens: 120, stream: false,
+        system: 'You are a live interpreter for a Korean Christian worship service. Translate Korean to natural English. Output 1 short sentence only — never more. Keep it concise; this appears live on screen. Use simple, reverent language. Infer omitted subjects from context. Correct misheared Korean Bible book names.\nKorean Bible books: 창세기(Genesis) 출애굽기(Exodus) 레위기(Leviticus) 민수기(Numbers) 신명기(Deuteronomy) 여호수아(Joshua) 사사기(Judges) 룻기(Ruth) 사무엘상하(1-2Samuel) 열왕기상하(1-2Kings) 역대상하(1-2Chronicles) 에스라(Ezra) 느헤미야(Nehemiah) 에스더(Esther) 욥기(Job) 시편(Psalms) 잠언(Proverbs) 전도서(Ecclesiastes) 이사야(Isaiah) 예레미야(Jeremiah) 에스겔(Ezekiel) 다니엘(Daniel) 호세아(Hosea) 요엘(Joel) 아모스(Amos) 요나(Jonah) 미가(Micah) 말라기(Malachi) 마태복음(Matthew) 마가복음(Mark) 누가복음(Luke) 요한복음(John) 사도행전(Acts) 로마서(Romans) 고린도전후서(1-2Corinthians) 갈라디아서(Galatians) 에베소서(Ephesians) 빌립보서(Philippians) 골로새서(Colossians) 히브리서(Hebrews) 야고보서(James) 베드로전후서(1-2Peter) 요한계시록(Revelation)\nRespond with ONLY the translation.',
+        messages: [{ role:'user', content: prompt }]
       })
     });
-
-    clearTimeout(safetyTimeout);
-
-    if (!res.ok){
-      var errData = await res.json();
-      showError('API error: ' + (errData&&errData.error ? errData.error.message : 'HTTP '+res.status));
-      isTranslating = false; afterTranslation(); return;
-    }
-
+    clearTimeout(safety);
+    if (!res.ok){ var e=await res.json(); showError('API error: '+(e&&e.error?e.error.message:'HTTP '+res.status)); isTranslating=false; afterTranslation(); return; }
     var data = await res.json();
-    var result = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
-
-    if (result){
-      displayFinalLine(result);
-      historyLog.push(result);
-      if (historyLog.length > 6) historyLog.shift();
-    }
-
-    isTranslating = false;
-    setStatus('🎤 Listening…', 'listening');
-    dbg('done | history:' + historyLog.length);
+    var result = data&&data.content&&data.content[0] ? data.content[0].text.trim() : null;
+    if (result){ displayFinalLine(result); historyLog.push(result); if(historyLog.length>6) historyLog.shift(); }
+    isTranslating = false; setStatus('\ud83c\udfa4 Listening\u2026','listening');
+    dbg('done | history:'+historyLog.length);
     afterTranslation();
-
   } catch(err){
-    clearTimeout(safetyTimeout);
-    if (err.name !== 'AbortError') showError('Network error: ' + err.message);
-    isTranslating = false;
-    afterTranslation();
+    clearTimeout(safety);
+    if (err.name!=='AbortError') showError('Network error: '+err.message);
+    isTranslating = false; afterTranslation();
   }
 }
 
 function afterTranslation(){
   var unsent = fullTranscript.slice(cursor).trim();
-  if (unsent.length > 10){
-    cursor = fullTranscript.length;
-    $('interim-text').textContent = '';
-    triggerTranslation(unsent);
-  }
+  if (unsent.length > 8){ cursor = fullTranscript.length; $('interim-text').textContent=''; triggerTranslation(unsent); }
 }
-
-window.addEventListener('resize', function() {
-  lineHeightCache = 0;
-  recomputeViewport();
-});
 </script>
 </body>
 </html>
