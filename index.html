@@ -66,13 +66,13 @@
 
 <script>
 // ── CONFIG ───────────────────────────────────────────────────────────────────
-var WORKER_URL       = 'https://live-translation.pauljkim22.workers.dev';
-var MODEL            = 'claude-sonnet-4-6';  // pin this — update manually if needed
-var SILENCE_MS       = 4500;   // ms of silence before committing a chunk
-var MAX_CHARS        = 50;     // Korean chars before force-committing
-var FORCE_COMMIT_MS  = 12000;   // hard commit every N ms during continuous speech
-var MAX_LINES        = 5;      // max lines visible on screen
-var SHORT_LINE_CHARS = 60;     // merge into previous line if shorter than this
+var WORKER_URL      = 'https://live-translation.pauljkim22.workers.dev';
+var MODEL           = 'claude-sonnet-4-6';  // pin this — update manually if needed
+var SILENCE_MS      = 8000;   // ms of silence before committing
+var MAX_CHARS       = 500;    // effectively disabled — silence + force commit drive timing
+var FORCE_COMMIT_MS = 25000;  // hard commit every N ms during continuous speech
+var MAX_LINES       = 5;
+var SHORT_LINE_CHARS = 60;
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
@@ -132,16 +132,12 @@ var watchdogTimer        = null;
 var isTranslating        = false;
 var translationQueue     = [];
 var historyLog           = [];
-var autoSermonContext     = '';
+var autoSermonContext    = '';
 var contextUpdateCounter = 0;
 var fullTranscript       = '';
 var cursor               = 0;
 var lastFirebaseKey      = null;
 var lastActivityTime     = 0;
-// Adaptive pace tracking
-var charsAtLastCommit    = 0;
-var timeAtLastCommit     = 0;
-var adaptiveCommitMs     = FORCE_COMMIT_MS;
 
 // ── UI HELPERS ───────────────────────────────────────────────────────────────
 function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
@@ -166,8 +162,6 @@ function reclassLines() {
 function displayFinalLine(text, skipFirebase) {
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
-
-  // Merge into last line if it's short
   var lastLine = linesEl.lastChild;
   if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
     var merged = lastLine.textContent + ' ' + text;
@@ -177,14 +171,10 @@ function displayFinalLine(text, skipFirebase) {
       lastLine.textContent = merged;
       lastLine.style.opacity = '1';
     }, 200);
-    if (!skipFirebase && lastFirebaseKey) {
-      translationsRef.child(lastFirebaseKey).update({ text: merged });
-    }
+    if (!skipFirebase && lastFirebaseKey) translationsRef.child(lastFirebaseKey).update({ text: merged });
     reclassLines();
     return lastLine;
   }
-
-  // Add new line
   var div = document.createElement('div');
   div.className = 'tline newest';
   div.textContent = text;
@@ -229,9 +219,6 @@ function startListening() {
   cursor = 0;
   translationQueue = [];
   lastActivityTime = Date.now();
-  charsAtLastCommit = 0;
-  timeAtLastCommit = 0;
-  adaptiveCommitMs = FORCE_COMMIT_MS;
   $('startBtn').textContent = '■ Stop';
   $('startBtn').classList.add('active');
   $('mic-indicator').classList.add('active');
@@ -260,8 +247,8 @@ function scheduleForceCommit() {
     if (!isListening) return;
     var unsent = fullTranscript.slice(cursor).trim();
     if (unsent) commitTranslation();
-    else forceCommitTimer = setTimeout(forceNext, adaptiveCommitMs);
-  }, adaptiveCommitMs);
+    else forceCommitTimer = setTimeout(forceNext, FORCE_COMMIT_MS);
+  }, FORCE_COMMIT_MS);
 }
 
 function spawnRec() {
@@ -303,12 +290,9 @@ function spawnRec() {
   rec.onend = function () {
     lastActivityTime = Date.now();
     if (!isListening) return;
-    // Flush any unsent finalized text before resetting
     var unsent = fullTranscript.slice(cursor).trim();
     if (unsent) enqueueTranslation(unsent);
-    // Reset after flush — Chrome starts a fresh transcript on restart
-    fullTranscript = '';
-    cursor = 0;
+    fullTranscript = ''; cursor = 0;
     clearTimeout(silenceTimer); silenceTimer = null;
     clearTimeout(forceCommitTimer); forceCommitTimer = null;
     setTimeout(spawnRec, 150);
@@ -318,31 +302,9 @@ function spawnRec() {
 }
 
 function commitTranslation() {
-  clearTimeout(silenceTimer);
-  silenceTimer = null;
+  clearTimeout(silenceTimer); silenceTimer = null;
   var unsent = fullTranscript.slice(cursor).trim();
   if (!unsent) return;
-
-  // Measure how fast the speaker is talking and adapt next commit window
-  var now = Date.now();
-  if (timeAtLastCommit > 0) {
-    var elapsed = now - timeAtLastCommit;
-    var charsProduced = fullTranscript.length - charsAtLastCommit;
-    // Target ~80 Korean chars per chunk for comfortable reading
-    // If speaker produces chars faster, shorten window; slower, lengthen it
-    var targetChars = 100;
-    if (charsProduced > 0 && elapsed > 0) {
-      var msPerChar = elapsed / charsProduced;
-      var newCommitMs = Math.round(msPerChar * targetChars);
-      adaptiveCommitMs = Math.min(MAX_COMMIT_MS, Math.max(MIN_COMMIT_MS,
-        adaptiveCommitMs * 0.6 + newCommitMs * 0.4  // smooth with 60/40 weighted average
-      ));
-      dbg('pace: ' + Math.round(msPerChar) + 'ms/char → commit: ' + Math.round(adaptiveCommitMs/1000) + 's');
-    }
-  }
-  timeAtLastCommit = now;
-  charsAtLastCommit = fullTranscript.length;
-
   cursor = fullTranscript.length;
   $('interim-text').textContent = '';
   scheduleForceCommit();
@@ -350,9 +312,8 @@ function commitTranslation() {
 }
 
 function enqueueTranslation(text) {
-  if (!text || text.trim().length < 10) return; // ignore empty/tiny chunks
+  if (!text || text.trim().length < 10) return;
   translationQueue.push(text);
-  dbg('queued | q:' + translationQueue.length);
   processQueue();
 }
 
@@ -363,9 +324,9 @@ function processQueue() {
 
 function stopListening() {
   isListening = false;
-  clearTimeout(silenceTimer);    silenceTimer = null;
+  clearTimeout(silenceTimer);     silenceTimer = null;
   clearTimeout(forceCommitTimer); forceCommitTimer = null;
-  clearInterval(watchdogTimer);  watchdogTimer = null;
+  clearInterval(watchdogTimer);   watchdogTimer = null;
   if (rec) { try { rec.onend = null; rec.stop(); } catch (e) {} rec = null; }
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
@@ -462,7 +423,7 @@ async function triggerTranslation(text) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 200,
+        max_tokens: 500,
         stream: false,
         system: systemPrompt,
         messages: [{ role: 'user', content: topicLine + contextLine + historyStr + 'Translate:\n' + text }]
@@ -480,7 +441,6 @@ async function triggerTranslation(text) {
     var data = await res.json();
     var result = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
 
-    // Filter out ellipsis-only, whitespace-only, or Korean-containing responses
     if (result && /^[\s.…]+$/.test(result)) result = null;
     if (result && /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(result)) result = null;
 
