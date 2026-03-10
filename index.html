@@ -75,6 +75,7 @@ var WORKER_URL = 'https://live-translation.pauljkim22.workers.dev';
 var SILENCE_MS = 4500;
 var MAX_CHARS  = 120;
 var MAX_LINES  = 5;
+var SHORT_LINE_CHARS = 60; // lines shorter than this get merged with the next
 
 var firebaseConfig = {
   apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
@@ -157,41 +158,75 @@ function reclassLines(){
 function displayFinalLine(text, skipFirebase){
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
+  var viewport = $('translation-viewport');
 
-  // Slide in from below
+  // Merge into last line if it's short
+  var lastLine = linesEl.lastChild;
+  if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
+    var merged = lastLine.textContent + ' ' + text;
+    lastLine.style.opacity = '0.5';
+    setTimeout(function(){ lastLine.textContent = merged; lastLine.style.opacity = '1'; }, 200);
+    if (!skipFirebase) translationsRef.push({ text: merged, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    reclassLines();
+    return lastLine;
+  }
+
+  // Add new line at bottom
   var div = document.createElement('div');
   div.className = 'tline newest';
   div.textContent = text;
-  div.style.opacity = '0';
-  div.style.transform = 'translateY(24px)';
   linesEl.appendChild(div);
-  requestAnimationFrame(function(){ requestAnimationFrame(function(){
-    div.style.opacity = '1';
-    div.style.transform = 'translateY(0)';
-  }); });
 
+  // Remove oldest lines beyond MAX_LINES
+  while (linesEl.children.length > MAX_LINES) {
+    linesEl.removeChild(linesEl.firstChild);
+  }
   reclassLines();
 
-  // Smoothly collapse oldest line if over MAX_LINES
-  while (linesEl.children.length > MAX_LINES) {
-    var oldest = linesEl.firstChild;
-    var h = oldest.offsetHeight;
-    oldest.style.maxHeight = h + 'px';
-    oldest.style.overflow = 'hidden';
-    requestAnimationFrame(function(){ requestAnimationFrame(function(){
-      oldest.style.maxHeight = '0';
-      oldest.style.opacity = '0';
-      oldest.style.marginBottom = '0';
-      oldest.style.transform = 'translateY(-10px)';
-    }); });
-    setTimeout(function(el){
-      if (linesEl.contains(el)){ linesEl.removeChild(el); reclassLines(); }
-    }.bind(null, oldest), 850);
+  // Size viewport to show exactly MAX_LINES worth of content
+  // then smoothly scroll it to show the latest
+  var lineH = div.offsetHeight;
+  var gap = 14;
+  var visibleH = (lineH + gap) * MAX_LINES - gap;
+  viewport.style.height = visibleH + 'px';
+
+  // Smooth scroll the viewport to bottom
+  var targetScroll = linesEl.scrollHeight - visibleH;
+  if (targetScroll > 0) {
+    smoothScroll(viewport, viewport.scrollTop, targetScroll, 700);
   }
 
-  reclassLines();
   if (!skipFirebase) translationsRef.push({ text:text, timestamp:firebase.database.ServerValue.TIMESTAMP });
   return div;
+}
+
+function pushHistory(text){
+  historyLog.push(text);
+  if (historyLog.length > 6) historyLog.shift();
+}
+
+function afterTranslation(){
+  var unsent = fullTranscript.slice(cursor).trim();
+  if (unsent.length > 10){
+    cursor = fullTranscript.length;
+    $('interim-text').textContent = '';
+    triggerTranslation(unsent);
+  }
+}
+
+function smoothScroll(el, from, to, duration) {
+  var start = performance.now();
+  function step(now) {
+    var elapsed = now - start;
+    var progress = Math.min(elapsed / duration, 1);
+    // ease in-out cubic
+    var ease = progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    el.scrollTop = from + (to - from) * ease;
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
 function setStreamingText(text){
@@ -292,6 +327,7 @@ function stopListening(){
 }
 
 // ── TRANSLATION ──────────────────────────────
+// Non-streaming: waits for clean result, then shows it once — no draft/revision flicker
 async function triggerTranslation(text){
   if (isTranslating) return;
   isTranslating = true;
@@ -301,7 +337,6 @@ async function triggerTranslation(text){
 
   var safetyTimeout = setTimeout(function(){
     if (!isTranslating) return;
-    if (currentStreamText.trim()){ displayFinalLine(currentStreamText.trim()); pushHistory(currentStreamText.trim()); }
     isTranslating = false; setStatus('🎤 Listening…', 'listening');
     afterTranslation();
   }, 15000);
@@ -319,108 +354,39 @@ async function triggerTranslation(text){
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 200,
-        stream: true,
-        system: 'You are a live interpreter for a Korean Christian worship service. Translate the Korean into clear, natural English. Aim for 1-2 complete sentences that flow naturally — not choppy fragments. Capture the full meaning with simple, reverent language. Infer any omitted subjects from context.\n\nIMPORTANT — Speech recognition often mishears Korean Bible book names. Use sermon context and surrounding words to identify and correct them. Common Korean Bible books and their English names:\n구약: 창세기(Genesis) 출애굽기(Exodus) 레위기(Leviticus) 민수기(Numbers) 신명기(Deuteronomy) 여호수아(Joshua) 사사기(Judges) 룻기(Ruth) 사무엘상하(1-2Samuel) 열왕기상하(1-2Kings) 역대상하(1-2Chronicles) 에스라(Ezra) 느헤미야(Nehemiah) 에스더(Esther) 욥기(Job) 시편(Psalms) 잠언(Proverbs) 전도서(Ecclesiastes) 아가(Song of Songs) 이사야(Isaiah) 예레미야(Jeremiah) 에스겔(Ezekiel) 다니엘(Daniel) 호세아(Hosea) 요엘(Joel) 아모스(Amos) 오바댜(Obadiah) 요나(Jonah) 미가(Micah) 나훔(Nahum) 하박국(Habakkuk) 스바냐(Zephaniah) 학개(Haggai) 스가랴(Zechariah) 말라기(Malachi)\n신약: 마태복음(Matthew) 마가복음(Mark) 누가복음(Luke) 요한복음(John) 사도행전(Acts) 로마서(Romans) 고린도전후서(1-2Corinthians) 갈라디아서(Galatians) 에베소서(Ephesians) 빌립보서(Philippians) 골로새서(Colossians) 데살로니가전후서(1-2Thessalonians) 디모데전후서(1-2Timothy) 디도서(Titus) 빌레몬서(Philemon) 히브리서(Hebrews) 야고보서(James) 베드로전후서(1-2Peter) 요한일이삼서(1-2-3John) 유다서(Jude) 요한계시록(Revelation)\n\nRespond with ONLY the translation, nothing else.',
+        stream: false,
+        system: 'You are a live interpreter for a Korean Christian worship service. Translate the Korean into clear, natural English. Aim for 1-2 complete sentences that flow naturally. Capture the full meaning with simple, reverent language. Infer omitted subjects from context. Speech recognition often mishears Korean Bible book names — correct them using context (e.g. 사사기=Judges, 열왕기=Kings, 이사야=Isaiah).\n\nCommon Korean Bible books: 창세기(Genesis) 출애굽기(Exodus) 레위기(Leviticus) 민수기(Numbers) 신명기(Deuteronomy) 여호수아(Joshua) 사사기(Judges) 룻기(Ruth) 사무엘상하(1-2Samuel) 열왕기상하(1-2Kings) 역대상하(1-2Chronicles) 에스라(Ezra) 느헤미야(Nehemiah) 에스더(Esther) 욥기(Job) 시편(Psalms) 잠언(Proverbs) 전도서(Ecclesiastes) 이사야(Isaiah) 예레미야(Jeremiah) 에스겔(Ezekiel) 다니엘(Daniel) 마태복음(Matthew) 마가복음(Mark) 누가복음(Luke) 요한복음(John) 사도행전(Acts) 로마서(Romans) 고린도전후서(1-2Corinthians) 갈라디아서(Galatians) 에베소서(Ephesians) 빌립보서(Philippians) 골로새서(Colossians) 히브리서(Hebrews) 야고보서(James) 요한계시록(Revelation)\n\nRespond with ONLY the translation, nothing else.',
         messages: [{ role: 'user', content: sermonLine + contextStr + 'Translate:\n' + text }]
       })
     });
 
+    clearTimeout(safetyTimeout);
+
     if (!res.ok){
       var errData = await res.json();
       showError('API error: ' + (errData&&errData.error ? errData.error.message : 'HTTP '+res.status));
-      isTranslating = false; clearTimeout(safetyTimeout); afterTranslation(); return;
+      isTranslating = false; afterTranslation(); return;
     }
 
-    var reader = res.body.getReader(), decoder = new TextDecoder(), buf = '';
-    while (true){
-      var chunk = await reader.read();
-      if (chunk.done) break;
-      buf += decoder.decode(chunk.value, { stream:true });
-      var lines = buf.split('\n'); buf = lines.pop();
-      for (var i = 0; i < lines.length; i++){
-        var line = lines[i].trim();
-        if (!line || line === 'event: ping' || !line.startsWith('data: ')) continue;
-        var raw = line.slice(6);
-        if (raw === '[DONE]') continue;
-        try {
-          var parsed = JSON.parse(raw);
-          if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.type === 'text_delta'){
-            currentStreamText += parsed.delta.text;
-            setStreamingText(currentStreamText);
-          }
-          if (parsed.type === 'message_stop'){
-            clearTimeout(safetyTimeout);
-            var draft = currentStreamText.trim();
-            currentStreamText = ''; setStreamingText('');
-            if (draft){
-              var lineEl = displayFinalLine(draft);
-              pushHistory(draft);
-              // Revision pass — polishes word choice in background
-              revise(text, draft, lineEl);
-            }
-            isTranslating = false; setStatus('🎤 Listening…', 'listening');
-            dbg('done | history:' + historyLog.length);
-            afterTranslation();
-          }
-        } catch(ex){}
-      }
+    var data = await res.json();
+    var result = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
+
+    if (result){
+      displayFinalLine(result);
+      pushHistory(result);
+      translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
     }
-    if (isTranslating){
-      clearTimeout(safetyTimeout);
-      var fin = currentStreamText.trim(); currentStreamText = ''; setStreamingText('');
-      if (fin){ displayFinalLine(fin); pushHistory(fin); }
-      isTranslating = false; setStatus('🎤 Listening…', 'listening');
-      afterTranslation();
-    }
+
+    isTranslating = false;
+    setStatus('🎤 Listening…', 'listening');
+    dbg('done | history:' + historyLog.length);
+    afterTranslation();
+
   } catch(err){
     clearTimeout(safetyTimeout);
     if (err.name !== 'AbortError') showError('Network error: ' + err.message);
     isTranslating = false; afterTranslation();
   }
-}
-
-function pushHistory(text){
-  historyLog.push(text);
-  if (historyLog.length > 6) historyLog.shift();
-}
-
-function afterTranslation(){
-  var unsent = fullTranscript.slice(cursor).trim();
-  if (unsent.length > 10){
-    cursor = fullTranscript.length;
-    $('interim-text').textContent = '';
-    triggerTranslation(unsent);
-  }
-}
-
-// Light revision pass — improves word choice without changing meaning
-async function revise(koText, draft, lineEl){
-  try {
-    var res = await fetch(WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 120,
-        stream: false,
-        system: 'You are a live interpreter for a Korean Christian worship service. Given a Korean phrase and a rough English draft, produce ONE clean, natural English sentence. Fix grammar and word choice. Keep it concise and reverent. Speech recognition often mishears Korean Bible book names — use context to correct them (e.g. 사사기=Judges, 이사야=Isaiah, 열왕기=Kings). Respond with ONLY the final sentence.',
-        messages: [{ role: 'user', content: 'Korean: ' + koText + '\nDraft: ' + draft + '\nFinal:' }]
-      })
-    });
-    if (!res.ok) return;
-    var data = await res.json();
-    var revised = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
-    if (!revised || revised === draft) return;
-    // Update line in place with fade
-    var linesEl = $('translation-lines');
-    if (lineEl && linesEl.contains(lineEl)){
-      lineEl.style.opacity = '0.4';
-      setTimeout(function(){ lineEl.textContent = revised; lineEl.style.opacity = '1'; }, 300);
-    }
-    // Update history and push revised to Firebase
-    if (historyLog.length) historyLog[historyLog.length - 1] = revised;
-    translationsRef.push({ text: revised, timestamp: firebase.database.ServerValue.TIMESTAMP });
-  } catch(e){}
 }
 </script>
 </body>
