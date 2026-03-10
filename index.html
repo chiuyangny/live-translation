@@ -67,6 +67,7 @@
 <script>
 // ── CONFIG ───────────────────────────────────────────────────────────────────
 var WORKER_URL       = 'https://live-translation.pauljkim22.workers.dev';
+var MODEL            = 'claude-sonnet-4-6';  // pin this — update manually if needed
 var SILENCE_MS       = 4500;  // ms of silence before committing a chunk
 var MAX_CHARS        = 50;    // Korean chars before force-committing
 var MAX_LINES        = 5;     // max lines visible on screen
@@ -335,7 +336,7 @@ function updateSermonContext() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: MODEL,
       max_tokens: 80,
       stream: false,
       system: 'You are summarizing a live sermon for use as translation context. '
@@ -409,7 +410,7 @@ async function triggerTranslation(text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: MODEL,
         max_tokens: 200,
         stream: false,
         system: systemPrompt,
