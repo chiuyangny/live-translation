@@ -65,12 +65,14 @@
 <div id="debug-badge">ready</div>
 
 <script>
+// ── CONFIG ───────────────────────────────────────────────────────────────────
 var WORKER_URL       = 'https://live-translation.pauljkim22.workers.dev';
-var SILENCE_MS       = 4500;
-var MAX_CHARS        = 50;
-var MAX_LINES        = 5;
-var SHORT_LINE_CHARS = 60;
+var SILENCE_MS       = 4500;  // ms of silence before committing a chunk
+var MAX_CHARS        = 50;    // Korean chars before force-committing
+var MAX_LINES        = 5;     // max lines visible on screen
+var SHORT_LINE_CHARS = 60;    // merge into previous line if shorter than this
 
+// ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
   apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
   authDomain: "live-translation-fd583.firebaseapp.com",
@@ -120,16 +122,19 @@ if (!isOperator) {
 }
 
 // ── OPERATOR STATE ───────────────────────────────────────────────────────────
-var rec              = null;
-var isListening      = false;
-var silenceTimer     = null;
-var isTranslating    = false;
-var translationQueue = [];
-var historyLog       = [];
-var sermonContext     = '';   // auto-built running context summary
-var fullTranscript   = '';
-var cursor           = 0;
-var lastFirebaseKey  = null;
+var rec                  = null;
+var isListening          = false;
+var silenceTimer         = null;
+var isTranslating        = false;
+var translationQueue     = [];
+var historyLog           = [];
+var autoSermonContext    = '';   // auto-built running context summary
+var contextUpdateCounter = 0;
+var fullTranscript       = '';
+var cursor               = 0;
+var lastFirebaseKey      = null;
+var lastActivityTime     = 0;
+var watchdogTimer        = null;
 
 // ── UI HELPERS ───────────────────────────────────────────────────────────────
 function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
@@ -146,8 +151,7 @@ function reclassLines() {
   var all = $('translation-lines').querySelectorAll('.tline');
   all.forEach(function (el, i) {
     el.classList.remove('newest', 'oldest');
-    var fromBottom = all.length - 1 - i;
-    if (fromBottom <= 2) el.classList.add('newest');
+    if (all.length - 1 - i <= 2) el.classList.add('newest');
     else el.classList.add('oldest');
   });
 }
@@ -178,17 +182,14 @@ function displayFinalLine(text, skipFirebase) {
   div.className = 'tline newest';
   div.textContent = text;
   linesEl.appendChild(div);
-
-  while (linesEl.children.length > MAX_LINES) {
-    linesEl.removeChild(linesEl.firstChild);
-  }
+  while (linesEl.children.length > MAX_LINES) linesEl.removeChild(linesEl.firstChild);
   reclassLines();
   return div;
 }
 
 function pushHistory(text) {
   historyLog.push(text);
-  if (historyLog.length > 6) historyLog.shift();
+  if (historyLog.length > 8) historyLog.shift();
 }
 
 function setStreamingText(text) {
@@ -204,6 +205,8 @@ function clearTranslations() {
   fullTranscript = ''; cursor = 0;
   lastFirebaseKey = null;
   translationQueue = [];
+  autoSermonContext = '';
+  contextUpdateCounter = 0;
   $('placeholder').style.display = 'block';
 }
 
@@ -218,11 +221,27 @@ function startListening() {
   fullTranscript = '';
   cursor = 0;
   translationQueue = [];
+  lastActivityTime = Date.now();
   $('startBtn').textContent = '■ Stop';
   $('startBtn').classList.add('active');
   $('mic-indicator').classList.add('active');
   setStatus('🎤 Listening…', 'listening');
   spawnRec();
+  startWatchdog();
+}
+
+function startWatchdog() {
+  clearInterval(watchdogTimer);
+  watchdogTimer = setInterval(function () {
+    if (!isListening) { clearInterval(watchdogTimer); return; }
+    if (Date.now() - lastActivityTime > 5000) {
+      dbg('watchdog restart');
+      if (rec) { try { rec.onend = null; rec.stop(); } catch (e) {} rec = null; }
+      fullTranscript = ''; cursor = 0;
+      lastActivityTime = Date.now();
+      setTimeout(spawnRec, 150);
+    }
+  }, 3000);
 }
 
 function spawnRec() {
@@ -234,26 +253,24 @@ function spawnRec() {
   rec.interimResults = true;
 
   rec.onresult = function (e) {
+    lastActivityTime = Date.now();
     var finalText = '';
     var interimText = '';
     for (var i = 0; i < e.results.length; i++) {
       if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
       else interimText += e.results[i][0].transcript;
     }
-
     if (finalText) fullTranscript = finalText.trim();
 
     var unsent = fullTranscript.slice(cursor).trim();
-    $('interim-text').textContent = interimText ? '"' + interimText.trim() + '"' : (unsent ? '"' + unsent + '"' : '');
+    $('interim-text').textContent = interimText
+      ? '"' + interimText.trim() + '"'
+      : (unsent ? '"' + unsent + '"' : '');
     dbg('final:' + fullTranscript.length + ' cursor:' + cursor + ' unsent:' + unsent.length + ' q:' + translationQueue.length);
 
     if (!unsent) return;
     clearTimeout(silenceTimer);
-
-    if (unsent.length >= MAX_CHARS) {
-      commitTranslation();
-      return;
-    }
+    if (unsent.length >= MAX_CHARS) { commitTranslation(); return; }
     silenceTimer = setTimeout(commitTranslation, SILENCE_MS);
   };
 
@@ -263,16 +280,12 @@ function spawnRec() {
   };
 
   rec.onend = function () {
+    lastActivityTime = Date.now();
     if (!isListening) return;
     // Flush any unsent text before the recognizer resets
     var unsent = fullTranscript.slice(cursor).trim();
-    if (unsent) {
-      cursor = fullTranscript.length;
-      enqueueTranslation(unsent);
-    }
-    // Chrome starts a fresh transcript on restart, so reset to match
-    fullTranscript = '';
-    cursor = 0;
+    if (unsent) { cursor = fullTranscript.length; enqueueTranslation(unsent); }
+    fullTranscript = ''; cursor = 0;
     setTimeout(spawnRec, 150);
   };
 
@@ -302,6 +315,7 @@ function processQueue() {
 function stopListening() {
   isListening = false;
   clearTimeout(silenceTimer); silenceTimer = null;
+  clearInterval(watchdogTimer); watchdogTimer = null;
   if (rec) { try { rec.onend = null; rec.stop(); } catch (e) {} rec = null; }
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
@@ -312,14 +326,11 @@ function stopListening() {
 }
 
 // ── AUTO CONTEXT BUILDER ─────────────────────────────────────────────────────
-// After every few translations, ask Claude to update a short running summary
-// of the sermon so far — used to resolve ambiguous colloquial phrases
-var contextUpdateCounter = 0;
-function updateSermonContext(latestTranslation) {
+function updateSermonContext() {
   contextUpdateCounter++;
-  // Update every 4 translations so it stays current without too many API calls
   if (contextUpdateCounter % 4 !== 0) return;
   var recentLines = historyLog.slice(-6).join(' ');
+  if (!recentLines) return;
   fetch(WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -330,15 +341,15 @@ function updateSermonContext(latestTranslation) {
       system: 'You are summarizing a live sermon for use as translation context. '
         + 'Given the recent translated lines, write a single short sentence (max 20 words) '
         + 'describing the current topic, speaker situation, and any key context that would help '
-        + 'interpret ambiguous colloquial phrases. Be specific and factual. No preamble.',
+        + 'interpret ambiguous colloquial Korean phrases. Be specific and factual. No preamble.',
       messages: [{ role: 'user', content: 'Recent sermon lines:\n' + recentLines + '\n\nSummarize the current context in one short sentence.' }]
     })
-  }).then(function(r){ return r.json(); }).then(function(d){
+  }).then(function (r) { return r.json(); }).then(function (d) {
     if (d && d.content && d.content[0]) {
-      sermonContext = d.content[0].text.trim();
-      dbg('ctx: ' + sermonContext.slice(0, 40));
+      autoSermonContext = d.content[0].text.trim();
+      dbg('ctx: ' + autoSermonContext.slice(0, 50));
     }
-  }).catch(function(){});
+  }).catch(function () {});
 }
 
 // ── TRANSLATION ──────────────────────────────────────────────────────────────
@@ -354,31 +365,43 @@ async function triggerTranslation(text) {
     processQueue();
   }, 15000);
 
-  var manualTopic   = $('sermonContext').value.trim();
-  var topicLine     = manualTopic ? 'Sermon topic: ' + manualTopic + '\n\n' : '';
-  var contextLine   = sermonContext ? 'Running sermon context (use this to interpret ambiguous phrases): ' + sermonContext + '\n\n' : '';
-  var historyStr    = historyLog.length
-    ? 'Previous lines for context only (do not extend or continue them):\n' + historyLog.slice(-3).map(function(h){ return 'EN: ' + h; }).join('\n') + '\n\n'
+  var manualTopic = $('sermonContext').value.trim();
+  var topicLine   = manualTopic ? 'Sermon topic: ' + manualTopic + '\n\n' : '';
+  var contextLine = autoSermonContext ? 'Running sermon context (use to interpret ambiguous phrases): ' + autoSermonContext + '\n\n' : '';
+  var historyStr  = historyLog.length
+    ? 'Previous lines for context only (do not extend or continue them):\n'
+      + historyLog.slice(-3).map(function (h) { return 'EN: ' + h; }).join('\n') + '\n\n'
     : '';
 
-  var systemPrompt = 'You are a live interpreter for a Korean Christian worship service. '
-    + 'Translate ONLY what was said — do not add, infer, or expand beyond what was spoken. '
+  var systemPrompt =
+    'You are a live interpreter for a Korean Christian worship service. '
+    + 'Translate the full meaning of what was said into natural, faithful English. '
+    + 'Do not add or expand beyond what was spoken, but never omit or skip entire sentences or thoughts — '
+    + 'every complete idea the speaker expressed must appear in the translation. '
     + 'End your translation at a natural sentence or clause boundary — never mid-thought. '
-    + 'You may render the translation naturally and fluently, but never omit or skip entire sentences or thoughts. '
-    + 'Every complete idea the speaker expressed must appear in the translation. '
-    + 'Preserve the full meaning, tone, and theological weight of what was said. '
-    + 'Use standard English Bible vocabulary for theological terms (e.g. grace, redemption, sanctification, covenant). '
-    + 'Infer omitted grammatical subjects only when Korean grammar requires it, but never add content beyond what was spoken. '
-    + 'Speech recognition often mishears Korean Bible book names — correct them using context (e.g. 사사기=Judges, 열왕기=Kings, 이사야=Isaiah).\n\n'
-    + 'IMPORTANT: Never output "..." or any placeholder. Always translate what was said, even if it is a filler word, '
-    + 'repeated phrase, or transitional expression (e.g. 아/음/그/네 → "Yes" or "And" or omit gracefully). '
-    + 'If the input is genuinely unintelligible noise, respond with a single empty space " ". Never skip or omit a response.\n\n'
-    + 'Common Korean Bible books: 창세기(Genesis) 출애굽기(Exodus) 레위기(Leviticus) 민수기(Numbers) 신명기(Deuteronomy) '
-    + '여호수아(Joshua) 사사기(Judges) 룻기(Ruth) 사무엘상하(1-2Samuel) 열왕기상하(1-2Kings) 역대상하(1-2Chronicles) '
-    + '에스라(Ezra) 느헤미야(Nehemiah) 에스더(Esther) 욥기(Job) 시편(Psalms) 잠언(Proverbs) 전도서(Ecclesiastes) '
-    + '이사야(Isaiah) 예레미야(Jeremiah) 에스겔(Ezekiel) 다니엘(Daniel) 마태복음(Matthew) 마가복음(Mark) '
-    + '누가복음(Luke) 요한복음(John) 사도행전(Acts) 로마서(Romans) 고린도전후서(1-2Corinthians) 갈라디아서(Galatians) '
-    + '에베소서(Ephesians) 빌립보서(Philippians) 골로새서(Colossians) 히브리서(Hebrews) 야고보서(James) 요한계시록(Revelation)\n\n'
+    + 'Pay close attention to colloquial and conversational Korean — informal phrasing, negations, '
+    + 'and implied subjects must be rendered accurately. '
+    + 'When colloquial expressions are ambiguous, use the sermon context and prior lines to interpret '
+    + 'the most natural meaning rather than a literal one. '
+    + 'Preserve the tone and theological weight of what was said. '
+    + 'Use standard English Bible vocabulary for theological terms '
+    + '(e.g. grace, redemption, sanctification, covenant). '
+    + 'Infer omitted grammatical subjects only when Korean grammar requires it, '
+    + 'but never add content beyond what was spoken. '
+    + 'Speech recognition often mishears Korean Bible book names — correct them using context '
+    + '(e.g. 사사기=Judges, 열왕기=Kings, 이사야=Isaiah).\n\n'
+    + 'IMPORTANT: Never output "..." or any placeholder. Always translate what was said, even filler '
+    + 'words or transitional expressions (e.g. 아/음/그/네 → "Yes" / "And" / omit gracefully). '
+    + 'If the input is genuinely unintelligible noise, respond with a single space " ". '
+    + 'Never skip or omit a response.\n\n'
+    + 'Common Korean Bible books: 창세기(Genesis) 출애굽기(Exodus) 레위기(Leviticus) 민수기(Numbers) '
+    + '신명기(Deuteronomy) 여호수아(Joshua) 사사기(Judges) 룻기(Ruth) 사무엘상하(1-2Samuel) '
+    + '열왕기상하(1-2Kings) 역대상하(1-2Chronicles) 에스라(Ezra) 느헤미야(Nehemiah) 에스더(Esther) '
+    + '욥기(Job) 시편(Psalms) 잠언(Proverbs) 전도서(Ecclesiastes) 이사야(Isaiah) 예레미야(Jeremiah) '
+    + '에스겔(Ezekiel) 다니엘(Daniel) 마태복음(Matthew) 마가복음(Mark) 누가복음(Luke) 요한복음(John) '
+    + '사도행전(Acts) 로마서(Romans) 고린도전후서(1-2Corinthians) 갈라디아서(Galatians) '
+    + '에베소서(Ephesians) 빌립보서(Philippians) 골로새서(Colossians) 히브리서(Hebrews) '
+    + '야고보서(James) 요한계시록(Revelation)\n\n'
     + 'Respond with ONLY the translation, nothing else.';
 
   try {
@@ -413,12 +436,12 @@ async function triggerTranslation(text) {
       lastFirebaseKey = newRef.key;
       displayFinalLine(result, true);
       pushHistory(result);
-      updateSermonContext(result);
+      updateSermonContext();
     }
 
     isTranslating = false;
     setStatus('🎤 Listening…', 'listening');
-    dbg('done | history:' + historyLog.length + ' queue:' + translationQueue.length);
+    dbg('done | q:' + translationQueue.length + (autoSermonContext ? ' | ctx ok' : ''));
     processQueue();
 
   } catch (err) {
