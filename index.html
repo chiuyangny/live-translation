@@ -70,7 +70,7 @@ var WORKER_URL      = 'https://live-translation.pauljkim22.workers.dev';
 var MODEL           = 'claude-sonnet-4-6';  // pin this — update manually if needed
 var SILENCE_MS      = 8000;   // ms of silence before committing
 var MAX_CHARS       = 500;    // effectively disabled — silence + force commit drive timing
-var FORCE_COMMIT_MS = 25000;  // hard commit every N ms during continuous speech
+var FORCE_COMMIT_MS = 20000;  // hard commit every N ms during continuous speech
 var MAX_LINES       = 5;
 var SHORT_LINE_CHARS = 60;
 
@@ -443,6 +443,19 @@ async function triggerTranslation(text) {
 
     if (result && /^[\s.…]+$/.test(result)) result = null;
     if (result && /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(result)) result = null;
+
+    // Trim to last complete sentence — remove trailing dash or incomplete fragment
+    if (result) {
+      var lastStop = Math.max(
+        result.lastIndexOf('.'),
+        result.lastIndexOf('!'),
+        result.lastIndexOf('?')
+      );
+      if (lastStop > result.length * 0.4) {
+        // Only trim if the sentence boundary is at least 40% through — avoids cutting too short
+        result = result.slice(0, lastStop + 1).trim();
+      }
+    }
 
     if (result) {
       var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
