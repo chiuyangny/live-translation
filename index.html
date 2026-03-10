@@ -322,7 +322,7 @@ function commitTranslation() {
 }
 
 function enqueueTranslation(text) {
-  if (!text || text.trim().length < 2) return; // ignore empty/tiny chunks
+  if (!text || text.trim().length < 10) return; // ignore empty/tiny chunks
   translationQueue.push(text);
   dbg('queued | q:' + translationQueue.length);
   processQueue();
