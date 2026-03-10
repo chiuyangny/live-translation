@@ -255,36 +255,25 @@ function spawnRec() {
 
   rec.onresult = function (e) {
     lastActivityTime = Date.now();
-    var finalText = '';
+    var full = '';
     var interimText = '';
     for (var i = 0; i < e.results.length; i++) {
-      if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+      if (e.results[i].isFinal) full += e.results[i][0].transcript;
       else interimText += e.results[i][0].transcript;
     }
-    if (finalText) fullTranscript = finalText.trim();
+    // Use all text (final + interim) for length tracking and commits
+    // so chunks stay small during continuous speech
+    fullTranscript = (full + interimText).trim();
 
     var unsent = fullTranscript.slice(cursor).trim();
-    var unsentInterim = (unsent + interimText).trim();
-
     $('interim-text').textContent = interimText
       ? '"' + interimText.trim() + '"'
       : (unsent ? '"' + unsent + '"' : '');
-    dbg('final:' + fullTranscript.length + ' cursor:' + cursor + ' unsent:' + unsent.length + ' q:' + translationQueue.length);
+    dbg('len:' + fullTranscript.length + ' cursor:' + cursor + ' unsent:' + unsent.length + ' q:' + translationQueue.length);
 
-    if (!unsent && !interimText) return;
+    if (!unsent) return;
     clearTimeout(silenceTimer);
-
-    // Use combined length to detect when enough has accumulated,
-    // but only actually commit once finals are available
-    if (unsentInterim.length >= MAX_CHARS) {
-      if (unsent.length >= MAX_CHARS) {
-        commitTranslation();
-      } else {
-        // Finals not caught up yet — use a short timer to wait for them
-        silenceTimer = setTimeout(commitTranslation, 800);
-      }
-      return;
-    }
+    if (unsent.length >= MAX_CHARS) { commitTranslation(); return; }
     silenceTimer = setTimeout(commitTranslation, SILENCE_MS);
   };
 
