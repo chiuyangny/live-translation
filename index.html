@@ -66,8 +66,8 @@
 
 <script>
 var WORKER_URL       = 'https://live-translation.pauljkim22.workers.dev';
-var SILENCE_MS       = 4000;
-var MAX_CHARS        = 40;
+var SILENCE_MS       = 4500;
+var MAX_CHARS        = 50;
 var MAX_LINES        = 5;
 var SHORT_LINE_CHARS = 60;
 
@@ -126,6 +126,7 @@ var silenceTimer     = null;
 var isTranslating    = false;
 var translationQueue = [];
 var historyLog       = [];
+var sermonContext     = '';   // auto-built running context summary
 var fullTranscript   = '';
 var cursor           = 0;
 var lastFirebaseKey  = null;
@@ -310,6 +311,36 @@ function stopListening() {
   setStatus('Stopped');
 }
 
+// ── AUTO CONTEXT BUILDER ─────────────────────────────────────────────────────
+// After every few translations, ask Claude to update a short running summary
+// of the sermon so far — used to resolve ambiguous colloquial phrases
+var contextUpdateCounter = 0;
+function updateSermonContext(latestTranslation) {
+  contextUpdateCounter++;
+  // Update every 4 translations so it stays current without too many API calls
+  if (contextUpdateCounter % 4 !== 0) return;
+  var recentLines = historyLog.slice(-6).join(' ');
+  fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 80,
+      stream: false,
+      system: 'You are summarizing a live sermon for use as translation context. '
+        + 'Given the recent translated lines, write a single short sentence (max 20 words) '
+        + 'describing the current topic, speaker situation, and any key context that would help '
+        + 'interpret ambiguous colloquial phrases. Be specific and factual. No preamble.',
+      messages: [{ role: 'user', content: 'Recent sermon lines:\n' + recentLines + '\n\nSummarize the current context in one short sentence.' }]
+    })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d && d.content && d.content[0]) {
+      sermonContext = d.content[0].text.trim();
+      dbg('ctx: ' + sermonContext.slice(0, 40));
+    }
+  }).catch(function(){});
+}
+
 // ── TRANSLATION ──────────────────────────────────────────────────────────────
 async function triggerTranslation(text) {
   isTranslating = true;
@@ -323,10 +354,11 @@ async function triggerTranslation(text) {
     processQueue();
   }, 15000);
 
-  var sermonContext = $('sermonContext').value.trim();
-  var sermonLine    = sermonContext ? 'Sermon topic: ' + sermonContext + '\n\n' : '';
-  var contextStr    = historyLog.length
-    ? 'Previous line for context only (do not extend or continue it):\nEN: ' + historyLog[historyLog.length - 1] + '\n\n'
+  var manualTopic   = $('sermonContext').value.trim();
+  var topicLine     = manualTopic ? 'Sermon topic: ' + manualTopic + '\n\n' : '';
+  var contextLine   = sermonContext ? 'Running sermon context (use this to interpret ambiguous phrases): ' + sermonContext + '\n\n' : '';
+  var historyStr    = historyLog.length
+    ? 'Previous lines for context only (do not extend or continue them):\n' + historyLog.slice(-3).map(function(h){ return 'EN: ' + h; }).join('\n') + '\n\n'
     : '';
 
   var systemPrompt = 'You are a live interpreter for a Korean Christian worship service. '
@@ -358,7 +390,7 @@ async function triggerTranslation(text) {
         max_tokens: 200,
         stream: false,
         system: systemPrompt,
-        messages: [{ role: 'user', content: sermonLine + contextStr + 'Translate:\n' + text }]
+        messages: [{ role: 'user', content: topicLine + contextLine + historyStr + 'Translate:\n' + text }]
       })
     });
 
@@ -381,6 +413,7 @@ async function triggerTranslation(text) {
       lastFirebaseKey = newRef.key;
       displayFinalLine(result, true);
       pushHistory(result);
+      updateSermonContext(result);
     }
 
     isTranslating = false;
