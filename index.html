@@ -76,8 +76,8 @@
 
 <script>
 var WORKER_URL  = 'https://live-translation.pauljkim22.workers.dev';
-var SILENCE_MS  = 2500;   // 2.5s silence before translating
-var MAX_CHARS   = 60;     // hard cap — shorter chunks
+var SILENCE_MS  = 4500;
+var MAX_CHARS   = 120;
 var MAX_LINES   = 5;
 var SHORT_LINE_CHARS = 60;
 
@@ -180,6 +180,15 @@ function displayFinalLine(text, skipFirebase) {
   $('placeholder').style.display = 'none';
   var linesEl   = $('translation-lines');
   var viewport  = $('translation-viewport');
+
+  // Merge into last line if it's short
+  var lastLine = linesEl.lastChild;
+  if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
+    lastLine.textContent = lastLine.textContent + ' ' + text;
+    reclassLines();
+    if (!skipFirebase) translationsRef.push({ text: lastLine.textContent, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    return lastLine;
+  }
 
   // Add new line
   var div = document.createElement('div');
