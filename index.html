@@ -170,7 +170,11 @@ function displayFinalLine(text, skipFirebase){
   if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
     var merged = lastLine.textContent + ' ' + text;
     lastLine.style.opacity = '0.5';
-    setTimeout(function(){ lastLine.textContent = merged; lastLine.style.opacity = '1'; }, 200);
+    setTimeout(function(){
+      if (!lastLine || !lastLine.parentNode) return; // guard: element may have been removed
+      lastLine.textContent = merged;
+      lastLine.style.opacity = '1';
+    }, 200);
     // FIX 2 (merge): update the existing Firebase entry rather than pushing a duplicate
     if (!skipFirebase && lastFirebaseKey) {
       translationsRef.child(lastFirebaseKey).update({ text: merged });
