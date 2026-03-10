@@ -263,6 +263,13 @@ function spawnRec() {
 
   rec.onend = function () {
     if (!isListening) return;
+    // Flush any unsent text before the recognizer resets
+    var unsent = fullTranscript.slice(cursor).trim();
+    if (unsent) {
+      cursor = fullTranscript.length;
+      enqueueTranslation(unsent);
+    }
+    // Chrome starts a fresh transcript on restart, so reset to match
     fullTranscript = '';
     cursor = 0;
     setTimeout(spawnRec, 150);
