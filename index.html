@@ -72,7 +72,7 @@ var SILENCE_MS      = 8000;   // ms of silence before committing
 var MAX_CHARS       = 500;    // effectively disabled — silence + force commit drive timing
 var FORCE_COMMIT_MS = 20000;  // hard commit every N ms during continuous speech
 var MAX_LINES       = 5;
-var SHORT_LINE_CHARS = 60;
+var SHORT_LINE_CHARS = 120;
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
@@ -373,8 +373,18 @@ async function triggerTranslation(text) {
     if (!isTranslating) return;
     isTranslating = false;
     setStatus('🎤 Listening…', 'listening');
+    dbg('safety timeout fired');
     processQueue();
   }, 30000);
+
+  // Secondary unlock — if queue is stuck after 35s, force reset
+  var unlockTimeout = setTimeout(function () {
+    if (isTranslating) {
+      isTranslating = false;
+      dbg('force unlocked');
+      processQueue();
+    }
+  }, 35000);
 
   var manualTopic = $('sermonContext').value.trim();
   var topicLine   = manualTopic ? 'Sermon topic: ' + manualTopic + '\n\n' : '';
@@ -431,6 +441,7 @@ async function triggerTranslation(text) {
     });
 
     clearTimeout(safetyTimeout);
+    clearTimeout(unlockTimeout);
 
     if (!res.ok) {
       var errData = await res.json();
@@ -474,6 +485,7 @@ async function triggerTranslation(text) {
 
   } catch (err) {
     clearTimeout(safetyTimeout);
+    clearTimeout(unlockTimeout);
     if (err.name !== 'AbortError') showError('Network error: ' + err.message);
     isTranslating = false;
     processQueue();
