@@ -6,6 +6,7 @@
 <title>Live Translation</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0a0a0a; color: #f0f0f0; font-family: 'Georgia', serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -90,6 +91,12 @@ firebase.initializeApp(firebaseConfig);
 var db = firebase.database();
 var translationsRef = db.ref('translations');
 var isOperator = window.location.search.includes('operator');
+
+if (isOperator) {
+  firebase.auth().signInAnonymously().catch(function (err) {
+    console.warn('Firebase auth failed:', err.message);
+  });
+}
 
 function $(id) { return document.getElementById(id); }
 
@@ -399,8 +406,12 @@ async function triggerTranslation(text, attempt) {
     }
 
     if (result) {
-      var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
-      lastFirebaseKey = newRef.key;
+      try {
+        var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
+        if (newRef) lastFirebaseKey = newRef.key;
+      } catch (fbErr) {
+        dbg('firebase err: ' + fbErr.message);
+      }
       displayFinalLine(result, true);
       historyLog.push(result);
       if (historyLog.length > 8) historyLog.shift();
