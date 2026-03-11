@@ -28,7 +28,7 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
 #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
 #translation-box { width: 100%; max-width: 1200px; text-align: center; }
-#translation-lines { display: flex; flex-direction: column; gap: 14px; margin-bottom: 12px; }
+#translation-lines { display: flex; flex-direction: column; gap: 24px; margin-bottom: 12px; }
 .tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.8s, opacity 0.8s; }
 .tline.newest { color: #ffffff; }
 .tline.oldest  { color: #555555; }
@@ -70,7 +70,7 @@ var WORKER_URL      = 'https://live-translation.pauljkim22.workers.dev';
 var MODEL           = 'claude-sonnet-4-6';
 var SILENCE_MS      = 6000;
 var FORCE_COMMIT_MS = 17000;
-var INITIAL_DELAY_MS = 3000;
+var INITIAL_DELAY_MS = 1000;
 var MAX_CHARS       = 500;
 var MAX_LINES       = 5;
 var SHORT_LINE_CHARS = 120;
@@ -378,8 +378,26 @@ function commitTranslation() {
 
 function enqueueTranslation(text) {
   if (!text || text.trim().length < 10) return;
-  translationQueue.push(text);
+  // Split large chunks at sentence boundaries into ~200 char pieces
+  var chunks = splitIntoChunks(text.trim(), 200);
+  chunks.forEach(function (chunk) { translationQueue.push(chunk); });
   processQueue();
+}
+
+function splitIntoChunks(text, maxChars) {
+  if (text.length <= maxChars) return [text];
+  var sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  var chunks = [], current = '';
+  sentences.forEach(function (s) {
+    if (current.length + s.length > maxChars && current) {
+      chunks.push(current.trim());
+      current = s;
+    } else {
+      current += s;
+    }
+  });
+  if (current.trim()) chunks.push(current.trim());
+  return chunks.length ? chunks : [text];
 }
 
 function processQueue() {
