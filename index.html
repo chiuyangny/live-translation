@@ -24,8 +24,8 @@
   #display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 40px; position: relative; overflow: hidden; }
   #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
   #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
-  #translation-box { width: 100%; max-width: 1200px; text-align: center; }
-  #translation-lines { display: flex; flex-direction: column; gap: 28px; margin-bottom: 12px; }
+  #translation-box { width: 100%; max-width: 1200px; text-align: center; display: flex; flex-direction: column; justify-content: flex-end; }
+  #translation-lines { display: flex; flex-direction: column; gap: 14px; margin-bottom: 12px; }
   .tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); overflow: hidden; transition: color 0.8s, opacity 0.8s; }
   .tline.newest { color: #ffffff; }
   .tline.oldest { color: #555555; }
@@ -143,11 +143,10 @@ var isReview        = window.location.search.includes('review');
 function $(id) { return document.getElementById(id); }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
-if (isOperator || isReview) {
-  firebase.auth().signInAnonymously().catch(function (err) {
-    console.warn('Firebase auth failed:', err.message);
-  });
-}
+// All modes need auth to read/write Firebase
+firebase.auth().signInAnonymously().catch(function (err) {
+  console.warn('Firebase auth failed:', err.message);
+});
 
 // ── REVIEW PAGE ───────────────────────────────────────────────────────────────
 if (isReview) {
@@ -570,10 +569,8 @@ async function triggerTranslation(text, attempt) {
   var contextLine = autoSermonContext ? 'Running sermon context (use to interpret ambiguous phrases): ' + autoSermonContext + '\n\n' : '';
   var libraryLine = buildLibraryContext();
   var historyStr  = historyLog.length
-    ? 'Recent translations — use for tone, vocabulary, and continuity:\n'
-      + historyLog.slice(-8).map(function (h) { return 'EN: ' + h; }).join('\n') + '\n\n'
-      + 'The previous translation ended with: "' + historyLog[historyLog.length - 1] + '"\n'
-      + 'Your translation must connect smoothly to this — if the new chunk continues the same thought or narrative, begin with a natural connector (e.g. "And", "So", "Then") rather than starting a new disconnected sentence.\n\n'
+    ? 'Previous lines for context only (do not extend or continue them):\n'
+      + historyLog.slice(-3).map(function (h) { return 'EN: ' + h; }).join('\n') + '\n\n'
     : '';
 
   var systemPrompt =
@@ -640,7 +637,6 @@ async function triggerTranslation(text, attempt) {
     var result = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
 
     if (result && /^[\s.…]+$/.test(result)) result = null;
-    if (result && /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(result)) result = null;
 
     if (result) {
       var lastStop = Math.max(result.lastIndexOf('.'), result.lastIndexOf('!'), result.lastIndexOf('?'));
