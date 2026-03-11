@@ -535,8 +535,10 @@ var SYSTEM_PROMPT =
   'Preserve the speaker\'s tone — whether urgent, gentle, celebratory, or solemn. ' +
   'When the speaker references a specific proper noun — a person\'s name, TV program, book, brand, or cultural reference — ' +
   'preserve it explicitly by name. Do not generalize or paraphrase proper nouns into generic descriptions. ' +
-  'For Korean cultural references unfamiliar to English speakers, provide the romanized or translated name ' +
-  'followed by a brief parenthetical in English if it aids understanding. ' +
+  'Always translate the name into English where a natural translation exists (e.g. 골목식당 = "Alley Restaurant"). ' +
+  'Only romanize if there is no meaningful English translation. ' +
+  'For Korean cultural references unfamiliar to English speakers, give the translated English name ' +
+  'followed by a brief parenthetical if it aids understanding (e.g. "Baek Jong-won\'s Alley Restaurant (a TV program helping struggling restaurants)"). ' +
   'Infer implied grammatical subjects from context when Korean omits them, but add nothing beyond what was said. ' +
   'The input comes from live speech recognition and may begin mid-sentence — ' +
   'start from the first complete thought and end at a natural sentence boundary. ' +
@@ -551,8 +553,8 @@ var SYSTEM_PROMPT =
   '디도=Titus, 빌레몬=Philemon, 히브리서=Hebrews, 야고보서=James, 베드로=Peter, ' +
   '요한서=John (epistle), 유다서=Jude, 요한계시록=Revelation. ' +
   'Respond with ONLY the translation — no commentary, no explanation. ' +
-  'If the translation is long, break it into short natural paragraphs of 1-2 sentences each, separated by a blank line. ' +
-  'Never exceed 4 paragraphs per response.';
+  'If the translation is long, break it into paragraphs of 2-3 complete sentences each, separated by a blank line. ' +
+  'Never break mid-sentence. Never exceed 4 paragraphs per response.';
 
 // ── TRANSLATION ───────────────────────────────────────────────────────────────
 async function triggerTranslation(text, attempt) {
