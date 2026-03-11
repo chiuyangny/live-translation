@@ -236,7 +236,8 @@ function startWatchdog() {
       if (unsent) enqueueTranslation(unsent);
       fullTranscript = ''; cursor = 0;
       lastActivityTime = Date.now();
-      setTimeout(spawnRec, 150);
+      lastActivityTime = Date.now();
+      setTimeout(spawnRec, 50);
     }
   }, 3000);
 }
