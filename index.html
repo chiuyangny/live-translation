@@ -129,8 +129,6 @@ var isListening          = false;
 var silenceTimer         = null;
 var forceCommitTimer     = null;
 var watchdogTimer        = null;
-var isTranslating        = false;
-var translationQueue     = [];
 var historyLog           = [];
 var autoSermonContext    = '';
 var contextUpdateCounter = 0;
@@ -202,7 +200,9 @@ function clearTranslations() {
   setStreamingText('');
   fullTranscript = ''; cursor = 0;
   lastFirebaseKey = null;
-  translationQueue = [];
+  displayQueue = [];
+  activeRequests = 0;
+  recentKorean = [];
   autoSermonContext = '';
   contextUpdateCounter = 0;
   $('placeholder').style.display = 'block';
@@ -217,7 +217,8 @@ function startListening() {
   if (!SR) { showError('Please use Google Chrome.'); return; }
   isListening = true;
   fullTranscript = ''; cursor = 0;
-  translationQueue = [];
+  displayQueue = []; activeRequests = 0;
+  recentKorean = [];
   firstCommitDone = false;
   lastActivityTime = Date.now();
   $('startBtn').textContent = '■ Stop';
@@ -313,15 +314,98 @@ function commitTranslation() {
   enqueueTranslation(unsent);
 }
 
+// ── TRANSLATION (parallel with ordered display) ──────────────────────────────
+var displayQueue     = [];   // ordered list of pending display slots
+var activeRequests   = 0;
+var MAX_PARALLEL     = 3;    // max simultaneous API calls
+
 function enqueueTranslation(text) {
   if (!text || text.trim().length < 10) return;
-  translationQueue.push(text);
-  processQueue();
+  // Reserve a display slot in order immediately
+  var slot = { text: null, ready: false };
+  displayQueue.push(slot);
+  activeRequests++;
+  dbg('active:' + activeRequests + ' display q:' + displayQueue.length);
+  translateChunk(text, slot);
 }
 
-function processQueue() {
-  if (isTranslating || translationQueue.length === 0) return;
-  triggerTranslation(translationQueue.shift());
+function processQueue() {} // no-op — parallel mode doesn't need this
+
+async function translateChunk(text, koreanContext, slot) {
+  var controller = new AbortController();
+  var timeout = setTimeout(function () { controller.abort(); }, 25000);
+
+  var manualTopic = $('sermonContext').value.trim();
+  var topicLine   = manualTopic ? 'Sermon topic: ' + manualTopic + '\n\n' : '';
+  var contextLine = autoSermonContext ? 'Sermon context: ' + autoSermonContext + '\n\n' : '';
+  var koreanLine  = koreanContext ? 'Preceding Korean (for continuity, do not translate): ' + koreanContext + '\n\n' : '';
+  var historyStr  = historyLog.length
+    ? 'Recent translations (context only):\n' + historyLog.slice(-6).map(function (h) { return '• ' + h; }).join('\n') + '\n\n'
+    : '';
+
+  try {
+    var res = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 600,
+        stream: false,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: topicLine + contextLine + koreanLine + historyStr + 'Translate:\n' + text }]
+      })
+    });
+
+    clearTimeout(timeout);
+
+    var result = null;
+    if (res.ok) {
+      var data = await res.json();
+      result = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
+      if (result && /^[\s.…]+$/.test(result)) result = null;
+      if (result && /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(result)) result = null;
+      if (result) {
+        var lastStop = Math.max(result.lastIndexOf('.'), result.lastIndexOf('!'), result.lastIndexOf('?'));
+        if (lastStop > 0 && lastStop > result.length * 0.3) result = result.slice(0, lastStop + 1).trim();
+        else result = result.replace(/[\s,\-–—]+$/, '').trim();
+      }
+    } else {
+      var errData = await res.json().catch(function(){return {};});
+      showError('API error: ' + (errData && errData.error ? errData.error.message : 'HTTP ' + res.status));
+    }
+
+    slot.text = result;
+    slot.ready = true;
+
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err.name !== 'AbortError') showError('Network error: ' + err.message);
+    slot.text = null;
+    slot.ready = true;
+  }
+
+  activeRequests--;
+  flushDisplayQueue();
+}
+
+function flushDisplayQueue() {
+  // Drain display slots in order — stop at first unready slot to preserve sequence
+  while (displayQueue.length > 0 && displayQueue[0].ready) {
+    var slot = displayQueue.shift();
+    if (slot.text) {
+      setStatus('🎤 Listening…', 'listening');
+      var newRef = translationsRef.push({ text: slot.text, timestamp: firebase.database.ServerValue.TIMESTAMP });
+      lastFirebaseKey = newRef.key;
+      displayFinalLine(slot.text, true);
+      pushHistory(slot.text);
+      updateSermonContext();
+    }
+  }
+  if (activeRequests === 0 && displayQueue.length === 0) {
+    setStatus(isListening ? '🎤 Listening…' : 'Stopped', isListening ? 'listening' : '');
+  }
+  dbg('active:' + activeRequests + ' display q:' + displayQueue.length);
 }
 
 function stopListening() {
@@ -400,11 +484,11 @@ async function triggerTranslation(text) {
     setStatus('🎤 Listening…', 'listening');
     dbg('safety timeout');
     processQueue();
-  }, 30000);
+  }, 20000);
 
   var unlockTimeout = setTimeout(function () {
     if (isTranslating) { isTranslating = false; dbg('force unlocked'); processQueue(); }
-  }, 35000);
+  }, 25000);
 
   var manualTopic = $('sermonContext').value.trim();
   var topicLine   = manualTopic ? 'Sermon topic: ' + manualTopic + '\n\n' : '';
