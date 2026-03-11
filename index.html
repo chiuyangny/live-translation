@@ -267,9 +267,10 @@ function spawnRec() {
       if (e.results[i].isFinal) full += e.results[i][0].transcript;
       else interim += e.results[i][0].transcript;
     }
-    fullTranscript = (full + interim).trim();
+    // Before first commit: only use finalized text so proper nouns are settled
+    fullTranscript = firstCommitDone ? (full + interim).trim() : full.trim();
     var unsent = fullTranscript.slice(cursor).trim();
-    $('interim-text').textContent = unsent ? '"' + unsent + '"' : '';
+    $('interim-text').textContent = unsent ? '"' + unsent + '"' : (interim ? '"' + interim.trim() + '"' : '');
     dbg('len:' + fullTranscript.length + ' unsent:' + unsent.length + ' q:' + translationQueue.length);
     if (!unsent) return;
     clearTimeout(silenceTimer);
