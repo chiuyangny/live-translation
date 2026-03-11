@@ -114,9 +114,10 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 var WORKER_URL       = 'https://live-translation.pauljkim22.workers.dev';
-var MODEL            = 'claude-sonnet-4-6';
+var MODEL            = 'claude-haiku-4-5-20251001';
 var SILENCE_MS       = 6000;
-var FORCE_COMMIT_MS  = 12000;
+var FORCE_COMMIT_MS  = 15000;
+var MAX_QUEUE        = 2;  // drop oldest chunks if queue backs up beyond this
 var MAX_CHARS        = 500;
 var MAX_LINES        = 5;
 var SHORT_LINE_CHARS = 0;
@@ -486,6 +487,11 @@ function commitTranslation() {
 function enqueueTranslation(text) {
   if (!text || text.trim().length < 10) return;
   translationQueue.push(text.trim());
+  // If queue is backing up, drop oldest chunks to stay close to live
+  while (translationQueue.length > MAX_QUEUE) {
+    dbg('queue full — dropping oldest chunk');
+    translationQueue.shift();
+  }
   processQueue();
 }
 
@@ -545,7 +551,7 @@ var SYSTEM_PROMPT =
   'If the input starts mid-sentence, begin the translation mid-sentence. ' +
   'If the input ends mid-sentence, end the translation there. ' +
   'Never restate the same idea twice in different words. ' +
-  'Correct misheared Korean Bible book names using context: ' +
+  'Correct misheared Korean Bible-related terms: 성경=Bible, 성경책=Bible, ' + +
   '창세기=Genesis, 출애굽기=Exodus, 레위기=Leviticus, 민수기=Numbers, 신명기=Deuteronomy, ' +
   '여호수아=Joshua, 사사기=Judges, 룻기=Ruth, 사무엘=Samuel, 열왕기=Kings, 역대=Chronicles, ' +
   '에스라=Ezra, 느헤미야=Nehemiah, 에스더=Esther, 욥기=Job, 시편=Psalms, 잠언=Proverbs, ' +
@@ -585,7 +591,7 @@ async function triggerTranslation(text, attempt) {
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        model: MODEL, max_tokens: 800, stream: false,
+        model: MODEL, max_tokens: 400, stream: false,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }]
       })
