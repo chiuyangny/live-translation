@@ -130,10 +130,12 @@ if (!isOperator) {
 
 // ── OPERATOR STATE ────────────────────────────────────────────────────────────
 var rec              = null;
+var recNext          = null;  // pre-warmed replacement recognizer
 var isListening      = false;
 var silenceTimer     = null;
 var forceCommitTimer = null;
 var watchdogTimer    = null;
+var proactiveTimer   = null;
 var isTranslating    = false;
 var translationQueue = [];
 var historyLog       = [];
@@ -142,6 +144,7 @@ var fullTranscript   = '';
 var cursor           = 0;
 var lastFirebaseKey  = null;
 var lastActivityTime = 0;
+var PROACTIVE_MS     = 25000;  // restart recognizer every 25s before Chrome drops it
 
 // ── UI HELPERS ────────────────────────────────────────────────────────────────
 function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
@@ -226,7 +229,9 @@ function stopListening() {
   clearTimeout(silenceTimer);     silenceTimer = null;
   clearTimeout(forceCommitTimer); forceCommitTimer = null;
   clearInterval(watchdogTimer);   watchdogTimer = null;
-  if (rec) { try { rec.onend = null; rec.stop(); } catch (e) {} rec = null; }
+  clearTimeout(proactiveTimer);   proactiveTimer = null;
+  if (recNext) { try { recNext.onend = null; recNext.abort(); } catch (e) {} recNext = null; }
+  if (rec)     { try { rec.onend = null;     rec.stop();      } catch (e) {} rec = null;     }
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
   $('mic-indicator').classList.remove('active');
@@ -239,7 +244,7 @@ function startWatchdog() {
   clearInterval(watchdogTimer);
   watchdogTimer = setInterval(function () {
     if (!isListening) { clearInterval(watchdogTimer); return; }
-    if (Date.now() - lastActivityTime > 8000) {
+    if (Date.now() - lastActivityTime > 5000) {
       dbg('watchdog restart');
       if (rec) { try { rec.onend = null; rec.stop(); } catch (e) {} rec = null; }
       var unsent = fullTranscript.slice(cursor).trim();
@@ -248,54 +253,107 @@ function startWatchdog() {
       lastActivityTime = Date.now();
       setTimeout(spawnRec, 50);
     }
-  }, 3000);
+  }, 2000);
 }
 
 function spawnRec() {
   if (!isListening) return;
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  rec = new SR();
-  rec.lang = 'ko-KR';
-  rec.continuous = true;
-  rec.interimResults = true;
+
+  // Pre-warm the next recognizer so it's ready before we need it
+  function preWarmNext() {
+    if (!isListening || recNext) return;
+    var next = new SR();
+    next.lang = 'ko-KR';
+    next.continuous = true;
+    next.interimResults = true;
+    next.onstart = function () { recNext = next; };  // mark ready once Chrome accepts it
+    next.onend = function () { if (recNext === next) recNext = null; };
+    next.onerror = function () { if (recNext === next) recNext = null; };
+    try { next.start(); recNext = next; } catch (e) { recNext = null; }
+  }
+
+  // Proactive swap — hand off to pre-warmed recognizer before Chrome drops us
+  function scheduleProactive() {
+    clearTimeout(proactiveTimer);
+    proactiveTimer = setTimeout(function () {
+      if (!isListening) return;
+      dbg('proactive swap');
+
+      // Save any unset text before swapping
+      var unsent = fullTranscript.slice(cursor).trim();
+
+      // Start new recognizer first (pre-warmed or fresh)
+      var incoming = recNext || new SR();
+      recNext = null;
+      attachHandlers(incoming);
+      try { if (!recNext) incoming.start(); } catch (e) {}  // already started if pre-warmed
+
+      // Stop old recognizer after new one is already running
+      var old = rec;
+      rec = incoming;
+      if (old) { try { old.onend = null; old.stop(); } catch (e) {} }
+
+      // Restore unsent text into new session
+      fullTranscript = unsent;
+      cursor = 0;
+
+      scheduleProactive();
+      scheduleForceCommit();
+    }, PROACTIVE_MS);
+  }
+
+  function attachHandlers(r) {
+    r.lang = 'ko-KR';
+    r.continuous = true;
+    r.interimResults = true;
+
+    r.onresult = function (e) {
+      if (r !== rec) return;  // ignore results from old recognizer after swap
+      lastActivityTime = Date.now();
+      var full = '', interim = '';
+      for (var i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) full += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      fullTranscript = firstCommitDone ? (full + interim).trim() : full.trim();
+      var unsent = fullTranscript.slice(cursor).trim();
+      $('interim-text').textContent = unsent ? '"' + unsent + '"' : (interim ? '"' + interim.trim() + '"' : '');
+      dbg('len:' + fullTranscript.length + ' unsent:' + unsent.length + ' q:' + translationQueue.length);
+      if (!unsent) return;
+      clearTimeout(silenceTimer);
+      if (unsent.length >= MAX_CHARS) { commitTranslation(); return; }
+      var delay = firstCommitDone ? SILENCE_MS : SILENCE_MS + INITIAL_DELAY_MS;
+      silenceTimer = setTimeout(commitTranslation, delay);
+    };
+
+    r.onerror = function (e) {
+      if (r !== rec) return;
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      if (e.error === 'not-allowed') { showError('Microphone access denied.'); stopListening(); }
+    };
+
+    r.onend = function () {
+      if (r !== rec) return;  // stale recognizer ending after swap — ignore
+      lastActivityTime = Date.now();
+      if (!isListening) return;
+      var unsent = fullTranscript.slice(cursor).trim();
+      if (unsent) enqueueTranslation(unsent);
+      fullTranscript = ''; cursor = 0;
+      clearTimeout(silenceTimer);     silenceTimer = null;
+      clearTimeout(forceCommitTimer); forceCommitTimer = null;
+      setTimeout(spawnRec, 50);
+    };
+  }
+
+  var r = new SR();
+  attachHandlers(r);
+  rec = r;
+  try { r.start(); } catch (e) {}
+
   scheduleForceCommit();
-
-  rec.onresult = function (e) {
-    lastActivityTime = Date.now();
-    var full = '', interim = '';
-    for (var i = 0; i < e.results.length; i++) {
-      if (e.results[i].isFinal) full += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
-    }
-    // Before first commit: only use finalized text so proper nouns are settled
-    fullTranscript = firstCommitDone ? (full + interim).trim() : full.trim();
-    var unsent = fullTranscript.slice(cursor).trim();
-    $('interim-text').textContent = unsent ? '"' + unsent + '"' : (interim ? '"' + interim.trim() + '"' : '');
-    dbg('len:' + fullTranscript.length + ' unsent:' + unsent.length + ' q:' + translationQueue.length);
-    if (!unsent) return;
-    clearTimeout(silenceTimer);
-    if (unsent.length >= MAX_CHARS) { commitTranslation(); return; }
-    var delay = firstCommitDone ? SILENCE_MS : SILENCE_MS + INITIAL_DELAY_MS;
-    silenceTimer = setTimeout(commitTranslation, delay);
-  };
-
-  rec.onerror = function (e) {
-    if (e.error === 'no-speech' || e.error === 'aborted') return;
-    if (e.error === 'not-allowed') { showError('Microphone access denied.'); stopListening(); }
-  };
-
-  rec.onend = function () {
-    lastActivityTime = Date.now();
-    if (!isListening) return;
-    var unsent = fullTranscript.slice(cursor).trim();
-    if (unsent) enqueueTranslation(unsent);
-    fullTranscript = ''; cursor = 0;
-    clearTimeout(silenceTimer);     silenceTimer = null;
-    clearTimeout(forceCommitTimer); forceCommitTimer = null;
-    setTimeout(spawnRec, 50);
-  };
-
-  try { rec.start(); } catch (e) {}
+  scheduleProactive();
+  setTimeout(preWarmNext, PROACTIVE_MS - 2000);  // pre-warm 2s before swap
 }
 
 function scheduleForceCommit() {
