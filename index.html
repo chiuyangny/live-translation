@@ -9,9 +9,13 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0a0a0a; color: #f0f0f0; font-family: 'Georgia', serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+html, body { height: 100%; overflow: hidden; background: #0a0a0a; color: #f0f0f0; font-family: 'Georgia', serif; }
 
-/* ── OPERATOR ── */
+/* ── PAGES ── */
+#main-page { display: flex; flex-direction: column; height: 100%; }
+#review-page { display: none; flex-direction: column; height: 100%; }
+
+/* ── CONTROLS ── */
 #controls { background: #111; border-bottom: 1px solid #222; padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
 input[type="text"] { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; color: #f0f0f0; padding: 6px 10px; font-size: 13px; width: 260px; }
 button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; font-weight: 600; }
@@ -25,12 +29,12 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 #error-box { display: none; background: #1a0000; border: 1px solid #500; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #ff6b6b; margin: 6px 20px; font-family: monospace; word-break: break-all; flex-shrink: 0; }
 
 /* ── DISPLAY ── */
-#display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 40px; position: relative; overflow: hidden; min-height: 0; }
-#placeholder { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: #2a2a2a; pointer-events: none; z-index: 0; }
+#display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 40px; position: relative; overflow: hidden; }
+#placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
 #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
-#translation-box { position: relative; z-index: 1; width: 100%; max-width: 1200px; text-align: center; }
+#translation-box { width: 100%; max-width: 1200px; text-align: center; }
 #translation-lines { display: flex; flex-direction: column; gap: 24px; margin-bottom: 12px; }
-.tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.8s, opacity 0.8s; }
+.tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); overflow: hidden; transition: color 0.8s, opacity 0.8s; }
 .tline.newest { color: #ffffff; }
 .tline.oldest  { color: #555555; }
 #interim-text { font-size: clamp(11px,1.2vw,16px); color: #333; margin-top: 12px; font-style: italic; min-height: 1.2em; font-family: sans-serif; }
@@ -40,19 +44,16 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
 /* ── REVIEW PAGE ── */
-#review-page { display: none; flex-direction: column; height: 100vh; background: #0a0a0a; }
 #review-header { background: #111; border-bottom: 1px solid #222; padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
 #review-header h2 { font-size: 16px; font-weight: 600; color: #f0f0f0; flex: 1; }
 #review-header span { font-size: 12px; color: #555; }
 #review-list { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
 .review-item { background: #111; border: 1px solid #222; border-radius: 10px; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
 .review-item.flagged { border-color: #c0392b; background: #1a0a0a; }
-.review-item.saved { border-color: #27ae60; background: #0a1a0a; }
+.review-item.saved   { border-color: #27ae60; background: #0a1a0a; }
 .review-english { font-size: 15px; color: #f0f0f0; line-height: 1.5; }
 .review-actions { display: flex; gap: 8px; align-items: flex-start; }
 .btn-flag { background: #c0392b; color: #fff; font-size: 12px; padding: 5px 12px; white-space: nowrap; }
-.btn-flag.active { background: #e74c3c; }
-.btn-unflag { background: #333; color: #aaa; font-size: 12px; padding: 5px 12px; }
 .correction-area { display: none; flex-direction: column; gap: 8px; }
 .correction-area.open { display: flex; }
 .correction-area label { font-size: 11px; color: #666; font-family: sans-serif; }
@@ -65,17 +66,17 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 #library-list { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; }
 .lib-item { background: #111; border: 1px solid #222; border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .lib-item-text { flex: 1; }
-.lib-korean { font-size: 12px; color: #888; font-family: sans-serif; margin-bottom: 3px; }
+.lib-korean  { font-size: 12px; color: #888; font-family: sans-serif; margin-bottom: 3px; }
 .lib-english { font-size: 13px; color: #ccc; }
-.lib-note { font-size: 11px; color: #555; font-style: italic; margin-top: 3px; font-family: sans-serif; }
-.btn-delete { background: none; border: none; color: #444; font-size: 16px; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+.lib-note    { font-size: 11px; color: #555; font-style: italic; margin-top: 3px; font-family: sans-serif; }
+.btn-delete  { background: none; border: none; color: #444; font-size: 16px; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
 .btn-delete:hover { color: #e74c3c; }
 #lib-empty { font-size: 13px; color: #333; font-family: sans-serif; }
 </style>
 </head>
 <body>
 
-<!-- ── OPERATOR / VIEWER PAGE ── -->
+<!-- ── MAIN PAGE ── -->
 <div id="main-page">
   <div id="controls">
     <label style="font-size:13px;color:#888;">Sermon topic:</label>
@@ -112,16 +113,16 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-var WORKER_URL      = 'https://live-translation.pauljkim22.workers.dev';
-var MODEL           = 'claude-sonnet-4-6';
-var SILENCE_MS      = 5000;
-var FORCE_COMMIT_MS = 8000;
-var MAX_CHARS       = 500;
-var MAX_LINES       = 5;
+var WORKER_URL       = 'https://live-translation.pauljkim22.workers.dev';
+var MODEL            = 'claude-sonnet-4-6';
+var SILENCE_MS       = 5000;
+var FORCE_COMMIT_MS  = 8000;
+var MAX_CHARS        = 500;
+var MAX_LINES        = 5;
 var SHORT_LINE_CHARS = 0;
-var MAX_RETRIES     = 2;
-var REQUEST_TIMEOUT = 20000;
-var PROACTIVE_MS    = 25000;
+var MAX_RETRIES      = 2;
+var REQUEST_TIMEOUT  = 20000;
+var PROACTIVE_MS     = 25000;
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
 var firebaseConfig = {
@@ -134,7 +135,7 @@ var firebaseConfig = {
   appId: "1:189364035896:web:552700e29449859089a1cd"
 };
 firebase.initializeApp(firebaseConfig);
-var db = firebase.database();
+var db             = firebase.database();
 var translationsRef = db.ref('translations');
 var libraryRef      = db.ref('correction_library');
 var isOperator      = window.location.search.includes('operator');
@@ -151,82 +152,61 @@ if (isOperator || isReview) {
 
 // ── REVIEW PAGE ───────────────────────────────────────────────────────────────
 if (isReview) {
-  document.getElementById('main-page').style.display = 'none';
-  document.getElementById('review-page').style.display = 'flex';
+  $('main-page').style.display  = 'none';
+  $('review-page').style.display = 'flex';
 
-  var sessionItems = [];  // { key, english }
-  var library = {};       // key → { korean, english, note }
+  var library = {};
 
-  // Load library
   libraryRef.on('value', function (snap) {
     library = snap.val() || {};
     renderLibrary();
   });
 
-  // Load today's translations
   translationsRef.once('value', function (snap) {
     var items = [];
     snap.forEach(function (child) {
-      if (child.val() && child.val().text) {
-        items.push({ key: child.key, english: child.val().text });
-      }
+      if (child.val() && child.val().text) items.push({ key: child.key, english: child.val().text });
     });
-    sessionItems = items;
-    renderReviewList();
-  });
-
-  function renderReviewList() {
+    if (!items.length) return;
     var el = $('review-list');
-    if (!sessionItems.length) { el.innerHTML = '<div id="review-empty">No translations from this session yet.</div>'; return; }
     el.innerHTML = '';
-    sessionItems.forEach(function (item) {
+    items.forEach(function (item) {
       var div = document.createElement('div');
       div.className = 'review-item';
       div.id = 'ri-' + item.key;
       div.innerHTML =
-        '<div class="review-english">' + escHtml(item.english) + '</div>' +
-        '<div class="review-actions">' +
-          '<button class="btn-flag" onclick="flagItem(\'' + item.key + '\')">⚑ Flag as mistranslation</button>' +
-        '</div>' +
+        '<div class="review-english">' + esc(item.english) + '</div>' +
+        '<div class="review-actions"><button class="btn-flag" onclick="flagItem(\'' + item.key + '\')">⚑ Flag as mistranslation</button></div>' +
         '<div class="correction-area" id="ca-' + item.key + '">' +
           '<label>ORIGINAL (Korean or English phrase that was wrong)</label>' +
           '<input type="text" id="ko-' + item.key + '" placeholder="e.g. 백종원의 골목식당" />' +
           '<label>CORRECT ENGLISH</label>' +
-          '<textarea id="en-' + item.key + '" placeholder="e.g. Baek Jong-won\'s Alley Restaurant (a TV program helping struggling restaurants)">' + escHtml(item.english) + '</textarea>' +
-          '<label>NOTE (optional — e.g. "pastor uses this phrase often")</label>' +
-          '<input type="text" id="note-' + item.key + '" placeholder="optional context" />' +
+          '<textarea id="en-' + item.key + '">' + esc(item.english) + '</textarea>' +
+          '<label>NOTE (optional)</label>' +
+          '<input type="text" id="note-' + item.key + '" placeholder="e.g. pastor uses this phrase often" />' +
           '<button class="btn-save" onclick="saveCorrection(\'' + item.key + '\')">✓ Save to Library</button>' +
         '</div>';
       el.appendChild(div);
     });
-  }
+  });
 
   function flagItem(key) {
-    var ca = $('ca-' + key);
-    var ri = $('ri-' + key);
-    if (ca.classList.contains('open')) {
-      ca.classList.remove('open');
-      ri.classList.remove('flagged');
-    } else {
-      ca.classList.add('open');
-      ri.classList.add('flagged');
-    }
+    var ca = $('ca-' + key), ri = $('ri-' + key);
+    ca.classList.toggle('open');
+    ri.classList.toggle('flagged', ca.classList.contains('open'));
   }
 
   function saveCorrection(key) {
-    var korean  = $('ko-' + key).value.trim();
+    var korean = $('ko-' + key).value.trim();
     var english = $('en-' + key).value.trim();
-    var note    = $('note-' + key).value.trim();
+    var note = $('note-' + key).value.trim();
     if (!english) { alert('Please enter the correct English translation.'); return; }
     libraryRef.push({ korean: korean || '', english: english, note: note, savedAt: firebase.database.ServerValue.TIMESTAMP });
     var ri = $('ri-' + key);
-    ri.classList.remove('flagged');
-    ri.classList.add('saved');
+    ri.classList.remove('flagged'); ri.classList.add('saved');
     $('ca-' + key).classList.remove('open');
     var btn = ri.querySelector('.btn-flag');
-    btn.textContent = '✓ Saved';
-    btn.disabled = true;
-    btn.style.background = '#27ae60';
+    btn.textContent = '✓ Saved'; btn.disabled = true; btn.style.background = '#27ae60';
   }
 
   function renderLibrary() {
@@ -240,27 +220,24 @@ if (isReview) {
       div.className = 'lib-item';
       div.innerHTML =
         '<div class="lib-item-text">' +
-          (v.korean ? '<div class="lib-korean">' + escHtml(v.korean) + '</div>' : '') +
-          '<div class="lib-english">' + escHtml(v.english) + '</div>' +
-          (v.note ? '<div class="lib-note">' + escHtml(v.note) + '</div>' : '') +
+          (v.korean ? '<div class="lib-korean">' + esc(v.korean) + '</div>' : '') +
+          '<div class="lib-english">' + esc(v.english) + '</div>' +
+          (v.note ? '<div class="lib-note">' + esc(v.note) + '</div>' : '') +
         '</div>' +
-        '<button class="btn-delete" onclick="deleteLibEntry(\'' + k + '\')" title="Delete">✕</button>';
+        '<button class="btn-delete" onclick="deleteLib(\'' + k + '\')" title="Delete">✕</button>';
       el.appendChild(div);
     });
   }
 
-  function deleteLibEntry(key) {
-    if (confirm('Remove this entry from the library?')) libraryRef.child(key).remove();
-  }
-
-  function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function deleteLib(key) { if (confirm('Remove this entry?')) libraryRef.child(key).remove(); }
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 }
 
 // ── VIEWER MODE ───────────────────────────────────────────────────────────────
 if (!isOperator && !isReview) {
   document.addEventListener('DOMContentLoaded', function () {
     ['controls','error-box','interim-text','debug-badge'].forEach(function (id) {
-      $(id).style.display = 'none';
+      var el = $(id); if (el) el.style.display = 'none';
     });
     var seenKeys = new Set();
     translationsRef.limitToLast(10).once('value', function (snap) {
@@ -381,7 +358,7 @@ function stopListening() {
   clearInterval(watchdogTimer);   watchdogTimer = null;
   clearTimeout(proactiveTimer);   proactiveTimer = null;
   if (recNext) { try { recNext.onend = null; recNext.abort(); } catch (e) {} recNext = null; }
-  if (rec)     { try { rec.onend = null;     rec.stop();      } catch (e) {} rec = null; }
+  if (rec)     { try { rec.onend = null; rec.stop(); } catch (e) {} rec = null; }
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
   $('mic-indicator').classList.remove('active');
@@ -428,7 +405,7 @@ function spawnRec() {
       var incoming = recNext || new SR();
       recNext = null;
       attachHandlers(incoming);
-      try { if (!recNext) incoming.start(); } catch (e) {}
+      try { incoming.start(); } catch (e) {}
       var old = rec; rec = incoming;
       if (old) { try { old.onend = null; old.stop(); } catch (e) {} }
       fullTranscript = unsent; cursor = 0;
@@ -531,11 +508,10 @@ function processQueue() {
   triggerTranslation(translationQueue.shift(), 0);
 }
 
-// ── LIBRARY HELPERS ───────────────────────────────────────────────────────────
+// ── LIBRARY ───────────────────────────────────────────────────────────────────
 var cachedLibrary = [];
 libraryRef.on('value', function (snap) {
-  var val = snap.val() || {};
-  cachedLibrary = Object.values(val);
+  cachedLibrary = Object.values(snap.val() || {});
 });
 
 function buildLibraryContext() {
