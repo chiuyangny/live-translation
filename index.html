@@ -29,7 +29,7 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #2a2a2a; pointer-events: none; }
 #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
 #translation-box { position: relative; z-index: 1; width: 100%; max-width: 1200px; text-align: center; }
-#translation-lines { display: flex; flex-direction: column; gap: 24px; margin-bottom: 12px; }
+#translation-lines { display: flex; flex-direction: column-reverse; gap: 24px; margin-bottom: 12px; }
 .tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.8s, opacity 0.8s; }
 .tline.newest { color: #ffffff; }
 .tline.oldest  { color: #555555; }
@@ -326,8 +326,8 @@ function displayFinalLine(text, skipFirebase) {
   var div = document.createElement('div');
   div.className = 'tline newest';
   div.textContent = text;
-  linesEl.appendChild(div);
-  while (linesEl.children.length > MAX_LINES) linesEl.removeChild(linesEl.firstChild);
+  linesEl.insertBefore(div, linesEl.firstChild);
+  while (linesEl.children.length > MAX_LINES) linesEl.removeChild(linesEl.lastChild);
   reclassLines();
 }
 
