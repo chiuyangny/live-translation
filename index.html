@@ -115,8 +115,8 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 var WORKER_URL       = 'https://live-translation.pauljkim22.workers.dev';
 var MODEL            = 'claude-sonnet-4-6';
-var SILENCE_MS       = 5000;
-var FORCE_COMMIT_MS  = 15000;
+var SILENCE_MS       = 6000;
+var FORCE_COMMIT_MS  = 12000;
 var MAX_CHARS        = 500;
 var MAX_LINES        = 5;
 var SHORT_LINE_CHARS = 0;
@@ -540,8 +540,11 @@ var SYSTEM_PROMPT =
   'For Korean cultural references unfamiliar to English speakers, give the translated English name ' +
   'followed by a brief parenthetical if it aids understanding (e.g. "Baek Jong-won\'s Alley Restaurant (a TV program helping struggling restaurants)"). ' +
   'Infer implied grammatical subjects from context when Korean omits them, but add nothing beyond what was said. ' +
-  'The input comes from live speech recognition and may begin mid-sentence — ' +
-  'start from the first complete thought and end at a natural sentence boundary. ' +
+  'The input comes from live speech recognition and may begin or end mid-sentence. ' +
+  'Translate exactly what is given — do not pad, expand, repeat, or infer content that is not in the input. ' +
+  'If the input starts mid-sentence, begin the translation mid-sentence. ' +
+  'If the input ends mid-sentence, end the translation there. ' +
+  'Never restate the same idea twice in different words. ' +
   'Correct misheared Korean Bible book names using context: ' +
   '창세기=Genesis, 출애굽기=Exodus, 레위기=Leviticus, 민수기=Numbers, 신명기=Deuteronomy, ' +
   '여호수아=Joshua, 사사기=Judges, 룻기=Ruth, 사무엘=Samuel, 열왕기=Kings, 역대=Chronicles, ' +
