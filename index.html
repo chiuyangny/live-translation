@@ -111,9 +111,10 @@ var displayEl = $('display');
 
 function setTopSpacer() {
   var linesEl = $('translation-lines');
-  linesEl.style.paddingTop = displayEl.clientHeight * 0.7 + 'px';
+  var h = displayEl.clientHeight;
+  if (h > 0) linesEl.style.paddingTop = h * 0.7 + 'px';
 }
-setTopSpacer();
+document.addEventListener('DOMContentLoaded', setTopSpacer);
 window.addEventListener('resize', setTopSpacer);
 
 displayEl.addEventListener('scroll', function() {
