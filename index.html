@@ -73,7 +73,6 @@ var MAX_CHARS        = 500;
 var FORCE_COMMIT_MS  = 20000;
 var PROACTIVE_MS     = 25000;
 var MAX_LINES        = 5;
-var SHORT_LINE_CHARS = 120;
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
@@ -209,22 +208,7 @@ function ensurePunctuation(text) {
 
 function displayFinalLine(text, skipFirebase) {
   $('placeholder').style.display = 'none';
-  var linesEl  = $('translation-lines');
-  var lastLine = linesEl.lastChild;
-
-  if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
-    var merged = lastLine.textContent + ' ' + text;
-    lastLine.style.opacity = '0.5';
-    setTimeout(function() {
-      if (!lastLine || !lastLine.parentNode) return;
-      lastLine.textContent   = merged;
-      lastLine.style.opacity = '1';
-    }, 200);
-    if (!skipFirebase && lastFirebaseKey) translationsRef.child(lastFirebaseKey).update({ text: merged });
-    reclassLines();
-    return lastLine;
-  }
-
+  var linesEl = $('translation-lines');
   var div = document.createElement('div');
   div.className   = 'tline newest';
   div.textContent = text;
