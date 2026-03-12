@@ -193,22 +193,23 @@ if (!isOperator) {
 }
 
 // ── OPERATOR STATE ────────────────────────────────────────────────────────────
-var rec              = null;
-var recNext          = null;
-var isListening      = false;
-var silenceTimer     = null;
-var forceCommitTimer = null;
-var watchdogTimer    = null;
-var proactiveTimer   = null;
-var isTranslating    = false;
-var translationQueue = [];
-var historyLog       = [];
-var autoSermonContext = '';
+var rec               = null;
+var recNext           = null;
+var isListening       = false;
+var silenceTimer      = null;
+var forceCommitTimer  = null;
+var watchdogTimer     = null;
+var proactiveTimer    = null;
+var isTranslating     = false;
+var translatingWatchdog = null;
+var translationQueue  = [];
+var historyLog        = [];
+var autoSermonContext  = '';
 var contextUpdateCounter = 0;
-var fullTranscript   = '';
-var cursor           = 0;
-var lastFirebaseKey  = null;
-var lastActivityTime = 0;
+var fullTranscript    = '';
+var cursor            = 0;
+var lastFirebaseKey   = null;
+var lastActivityTime  = 0;
 var lastCommittedText = '';
 
 // ── UI HELPERS ────────────────────────────────────────────────────────────────
@@ -216,6 +217,21 @@ function showError(msg) { $('error-box').style.display = 'block'; $('error-box')
 function clearError()   { $('error-box').style.display = 'none'; }
 function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
 function dbg(msg) { var el = $('debug-badge'); if (el) el.textContent = msg; }
+
+// ── TRANSLATING LOCK WITH WATCHDOG ────────────────────────────────────────────
+function setTranslating(val) {
+  isTranslating = val;
+  clearTimeout(translatingWatchdog);
+  if (val) {
+    translatingWatchdog = setTimeout(function() {
+      if (!isTranslating) return;
+      dbg('translating watchdog fired');
+      isTranslating = false;
+      setStatus('🎤 Listening...', 'listening');
+      processQueue();
+    }, 35000);
+  }
+}
 
 function toggleFullscreen() {
   if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); $('controls').style.display = 'none'; }
@@ -298,8 +314,8 @@ function clearTranslations() {
   translationQueue  = [];
   autoSermonContext  = '';
   contextUpdateCounter = 0;
-  $('placeholder').style.display    = 'block';
-  $('new-indicator').style.display  = 'none';
+  $('placeholder').style.display   = 'block';
+  $('new-indicator').style.display = 'none';
 }
 
 // ── SPEECH RECOGNITION ────────────────────────────────────────────────────────
@@ -458,7 +474,7 @@ function stopListening() {
   clearTimeout(forceCommitTimer); forceCommitTimer = null;
   clearTimeout(proactiveTimer);   proactiveTimer   = null;
   clearInterval(watchdogTimer);   watchdogTimer    = null;
-  if (rec)     { try { rec.onend     = null; rec.stop();     } catch(e) {} rec     = null; }
+  if (rec)     { try { rec.onend = null; rec.stop();     } catch(e) {} rec     = null; }
   if (recNext) { try { recNext.onend = null; recNext.stop(); } catch(e) {} recNext = null; }
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
@@ -496,19 +512,23 @@ function updateSermonContext() {
 // ── TRANSLATION ───────────────────────────────────────────────────────────────
 async function triggerTranslation(text, retryCount) {
   retryCount = retryCount || 0;
-  isTranslating = true;
+  setTranslating(true);
   setStatus('Translating...', 'translating');
   clearError();
 
   var safetyTimeout = setTimeout(function() {
     if (!isTranslating) return;
-    isTranslating = false; setStatus('🎤 Listening...', 'listening');
-    dbg('safety timeout fired'); processQueue();
+    setTranslating(false);
+    setStatus('🎤 Listening...', 'listening');
+    dbg('safety timeout fired');
+    processQueue();
   }, 30000);
 
   var unlockTimeout = setTimeout(function() {
     if (!isTranslating) return;
-    isTranslating = false; dbg('force unlocked'); processQueue();
+    setTranslating(false);
+    dbg('force unlocked');
+    processQueue();
   }, 35000);
 
   var manualTopic = $('sermonContext').value.trim();
@@ -587,12 +607,14 @@ async function triggerTranslation(text, retryCount) {
         var delay = Math.pow(2, retryCount) * 2000;
         dbg('overloaded, retry ' + (retryCount + 1) + ' in ' + (delay/1000) + 's');
         setStatus('Retrying...', 'translating');
-        isTranslating = false;
+        setTranslating(false);
         setTimeout(function() { triggerTranslation(text, retryCount + 1); }, delay);
         return;
       }
       showError('API error: ' + (errData && errData.error ? errData.error.message : 'HTTP ' + status));
-      isTranslating = false; setStatus('🎤 Listening...', 'listening'); processQueue();
+      setTranslating(false);
+      setStatus('🎤 Listening...', 'listening');
+      processQueue();
       return;
     }
 
@@ -614,18 +636,25 @@ async function triggerTranslation(text, retryCount) {
 
     if (result) {
       if (!operatorAuthReady) {
-        setTimeout(function() { triggerTranslation(result); }, 500);
-        isTranslating = false;
-        return;
+        var waitForAuth = setInterval(function() {
+          if (!operatorAuthReady) return;
+          clearInterval(waitForAuth);
+          var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
+          lastFirebaseKey = newRef.key;
+          displayFinalLine(result);
+          pushHistory(result);
+          updateSermonContext();
+        }, 300);
+      } else {
+        var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
+        lastFirebaseKey = newRef.key;
+        displayFinalLine(result);
+        pushHistory(result);
+        updateSermonContext();
       }
-      var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
-      lastFirebaseKey = newRef.key;
-      displayFinalLine(result);
-      pushHistory(result);
-      updateSermonContext();
     }
 
-    isTranslating = false;
+    setTranslating(false);
     setStatus('🎤 Listening...', 'listening');
     dbg('done | q:' + translationQueue.length + (autoSermonContext ? ' | ctx ok' : ''));
     processQueue();
@@ -634,7 +663,9 @@ async function triggerTranslation(text, retryCount) {
     clearTimeout(safetyTimeout);
     clearTimeout(unlockTimeout);
     if (err.name !== 'AbortError') showError('Network error: ' + err.message);
-    isTranslating = false; setStatus('🎤 Listening...', 'listening'); processQueue();
+    setTranslating(false);
+    setStatus('🎤 Listening...', 'listening');
+    processQueue();
   }
 }
 </script>
