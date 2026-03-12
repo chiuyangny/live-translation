@@ -25,7 +25,7 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
 #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
 #translation-box { width: 100%; max-width: 1200px; text-align: center; }
-#translation-lines { display: flex; flex-direction: column; gap: 28px; margin-bottom: 12px; }
+#translation-lines { display: flex; flex-direction: column; gap: 32px; margin-bottom: 12px; }
 .tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); overflow: hidden; transition: color 0.8s, opacity 0.8s; }
 .tline.newest { color: #ffffff; }
 .tline.oldest { color: #555555; }
@@ -74,7 +74,6 @@ var FORCE_COMMIT_MS  = 20000;
 var PROACTIVE_MS     = 25000;
 var MAX_LINES        = 5;
 var SHORT_LINE_CHARS = 120;
-var BUFFER_FLUSH_MS  = 4000;   // max wait before flushing a short pending buffer
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
@@ -167,8 +166,6 @@ var fullTranscript   = '';
 var cursor           = 0;
 var lastFirebaseKey  = null;
 var lastActivityTime = 0;
-var pendingBuffer    = '';
-var flushTimer       = null;
 
 // ── UI HELPERS ────────────────────────────────────────────────────────────────
 function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
@@ -190,9 +187,50 @@ function reclassLines() {
   });
 }
 
+// ── PUNCTUATION FIX ───────────────────────────────────────────────────────────
+function fixPunctuation(text) {
+  if (!text) return text;
+  var t = text.trim();
+
+  // Count double quotes to detect open/unclosed quote
+  var quoteCount = (t.match(/"/g) || []).length;
+  var openQuote  = quoteCount % 2 !== 0;
+
+  var last = t.slice(-1);
+
+  // Already ends with .!? followed optionally by closing quote — good
+  if (/[.!?]["\u201D]?$/.test(t)) {
+    // If ends with just ." or !" or ?" → fine as-is
+    return t;
+  }
+
+  // Ends with closing quote but no punctuation before it e.g. [word"]
+  if (last === '"' || last === '\u201D') {
+    var beforeQuote = t.slice(-2, -1);
+    if (!/[.!?]/.test(beforeQuote)) {
+      return t.slice(0, -1) + '."';
+    }
+    return t;
+  }
+
+  // Open/unclosed quote — close it with ."
+  if (openQuote) {
+    return t + '."';
+  }
+
+  // Ends with any other non-punctuation — add period
+  if (!/[.!?]$/.test(t)) {
+    return t + '.';
+  }
+
+  return t;
+}
+
 function displayFinalLine(text, skipFirebase) {
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
+
+  // Every chunk is always a new line — no merging
   var div = document.createElement('div');
   div.className   = 'tline newest';
   div.textContent = text;
@@ -213,18 +251,6 @@ function setStreamingText(text) {
   else { $('placeholder').style.display = 'none'; el.classList.remove('empty'); t.textContent = text; cur.style.display = 'inline-block'; }
 }
 
-function flushPendingBuffer() {
-  clearTimeout(flushTimer); flushTimer = null;
-  if (!pendingBuffer) return;
-  var toDisplay   = pendingBuffer;
-  pendingBuffer   = '';
-  var newRef      = translationsRef.push({ text: toDisplay, timestamp: firebase.database.ServerValue.TIMESTAMP });
-  lastFirebaseKey = newRef.key;
-  displayFinalLine(toDisplay, true);
-  pushHistory(toDisplay);
-  updateSermonContext();
-}
-
 function clearTranslations() {
   translationsRef.remove();
   $('translation-lines').innerHTML = '';
@@ -234,8 +260,6 @@ function clearTranslations() {
   translationQueue = [];
   autoSermonContext = '';
   contextUpdateCounter = 0;
-  pendingBuffer = '';
-  clearTimeout(flushTimer); flushTimer = null;
   $('placeholder').style.display = 'block';
 }
 
@@ -357,7 +381,7 @@ function wireRecHandlers(r) {
     var unsent = fullTranscript.slice(cursor).trim();
     if (unsent) enqueueTranslation(unsent);
     fullTranscript = ''; cursor = 0;
-    clearTimeout(silenceTimer);     silenceTimer     = null;
+    clearTimeout(silenceTimer);    silenceTimer    = null;
     clearTimeout(forceCommitTimer); forceCommitTimer = null;
     setTimeout(spawnRec, 150);
   };
@@ -398,7 +422,7 @@ function processQueue() {
 
 function stopListening() {
   isListening = false;
-  clearTimeout(silenceTimer);     silenceTimer     = null;
+  clearTimeout(silenceTimer);    silenceTimer    = null;
   clearTimeout(forceCommitTimer); forceCommitTimer = null;
   clearTimeout(proactiveTimer);   proactiveTimer   = null;
   clearInterval(watchdogTimer);   watchdogTimer    = null;
@@ -557,15 +581,12 @@ async function triggerTranslation(text) {
     }
 
     if (result) {
-      pendingBuffer = pendingBuffer ? pendingBuffer + ' ' + result : result;
-      if (pendingBuffer.length >= SHORT_LINE_CHARS) {
-        // Long enough — flush immediately
-        flushPendingBuffer();
-      } else {
-        // Too short — wait for more chunks before showing, but don't wait forever
-        clearTimeout(flushTimer);
-        flushTimer = setTimeout(flushPendingBuffer, BUFFER_FLUSH_MS);
-      }
+      result = fixPunctuation(result);
+      var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
+      lastFirebaseKey = newRef.key;
+      displayFinalLine(result, true);
+      pushHistory(result);
+      updateSermonContext();
     }
 
     isTranslating = false;
