@@ -74,6 +74,7 @@ var FORCE_COMMIT_MS  = 20000;
 var PROACTIVE_MS     = 25000;
 var MAX_LINES        = 5;
 var SHORT_LINE_CHARS = 120;
+var BUFFER_FLUSH_MS  = 4000;   // max wait before flushing a short pending buffer
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
@@ -215,9 +216,9 @@ function setStreamingText(text) {
 function flushPendingBuffer() {
   clearTimeout(flushTimer); flushTimer = null;
   if (!pendingBuffer) return;
-  var toDisplay = pendingBuffer;
-  pendingBuffer = '';
-  var newRef = translationsRef.push({ text: toDisplay, timestamp: firebase.database.ServerValue.TIMESTAMP });
+  var toDisplay   = pendingBuffer;
+  pendingBuffer   = '';
+  var newRef      = translationsRef.push({ text: toDisplay, timestamp: firebase.database.ServerValue.TIMESTAMP });
   lastFirebaseKey = newRef.key;
   displayFinalLine(toDisplay, true);
   pushHistory(toDisplay);
@@ -558,10 +559,12 @@ async function triggerTranslation(text) {
     if (result) {
       pendingBuffer = pendingBuffer ? pendingBuffer + ' ' + result : result;
       if (pendingBuffer.length >= SHORT_LINE_CHARS) {
+        // Long enough — flush immediately
         flushPendingBuffer();
       } else {
+        // Too short — wait for more chunks before showing, but don't wait forever
         clearTimeout(flushTimer);
-        flushTimer = setTimeout(flushPendingBuffer, 3000);
+        flushTimer = setTimeout(flushPendingBuffer, BUFFER_FLUSH_MS);
       }
     }
 
