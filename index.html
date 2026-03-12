@@ -166,6 +166,8 @@ var fullTranscript   = '';
 var cursor           = 0;
 var lastFirebaseKey  = null;
 var lastActivityTime = 0;
+var pendingBuffer    = '';
+var flushTimer       = null;
 
 // ── UI HELPERS ────────────────────────────────────────────────────────────────
 function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
@@ -226,7 +228,27 @@ function fixPunctuation(text) {
   return t;
 }
 
-function displayFinalLine(text, skipFirebase) {
+function flushBuffer() {
+  clearTimeout(flushTimer); flushTimer = null;
+  if (!pendingBuffer) return;
+  var text = pendingBuffer;
+  pendingBuffer = '';
+  var newRef = translationsRef.push({ text: text, timestamp: firebase.database.ServerValue.TIMESTAMP });
+  lastFirebaseKey = newRef.key;
+  displayFinalLine(text, true);
+  pushHistory(text);
+  updateSermonContext();
+}
+
+function bufferResult(result) {
+  pendingBuffer = pendingBuffer ? pendingBuffer + ' ' + result : result;
+  if (pendingBuffer.length >= SHORT_LINE_CHARS) {
+    flushBuffer();
+  } else {
+    clearTimeout(flushTimer);
+    flushTimer = setTimeout(flushBuffer, 5000);
+  }
+}
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
 
@@ -260,6 +282,8 @@ function clearTranslations() {
   translationQueue = [];
   autoSermonContext = '';
   contextUpdateCounter = 0;
+  pendingBuffer = '';
+  clearTimeout(flushTimer); flushTimer = null;
   $('placeholder').style.display = 'block';
 }
 
@@ -582,11 +606,7 @@ async function triggerTranslation(text) {
 
     if (result) {
       result = fixPunctuation(result);
-      var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
-      lastFirebaseKey = newRef.key;
-      displayFinalLine(result, true);
-      pushHistory(result);
-      updateSermonContext();
+      bufferResult(result);
     }
 
     isTranslating = false;
