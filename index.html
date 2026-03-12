@@ -21,21 +21,58 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 #status.translating { color: #aaaaaa; }
 #status.error { color: #e74c3c; }
 #error-box { display: none; background: #1a0000; border: 1px solid #500; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #ff6b6b; margin: 6px 20px; font-family: monospace; word-break: break-all; flex-shrink: 0; }
-#display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 40px; position: relative; overflow: hidden; }
-#placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
+
+/* Scroll container */
+#display { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 40px 40px 24px; position: relative; scroll-behavior: smooth; }
+#display::-webkit-scrollbar { width: 4px; }
+#display::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+#placeholder { text-align: center; color: #2a2a2a; padding: 40vh 0; pointer-events: none; }
 #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
-#translation-box { width: 100%; max-width: 1200px; text-align: center; }
-#translation-lines { display: flex; flex-direction: column; gap: 48px; margin-bottom: 12px; }
-.tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); overflow: hidden; transition: color 0.8s, opacity 0.8s; }
+
+#translation-box { width: 100%; max-width: 1200px; margin: 0 auto; text-align: center; padding-bottom: 40px; }
+#translation-lines { display: flex; flex-direction: column; gap: 48px; }
+
+.tline {
+  font-size: clamp(18px, 2.5vw, 36px);
+  line-height: 1.4;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.8);
+  transition: color 0.8s, opacity 0.8s, transform 0.5s cubic-bezier(0.22,1,0.36,1);
+}
 .tline.newest { color: #ffffff; }
 .tline.oldest { color: #555555; }
+.tline.entering { opacity: 0; transform: translateY(30px); }
+
+#interim-box { margin-top: 48px; min-height: 1.2em; }
 #streaming-line { font-size: clamp(18px,2.5vw,36px); line-height: 1.4; color: #aaaaaa; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.4em; transition: opacity 0.3s; }
 #streaming-line.empty { opacity: 0; }
 #streaming-cursor { display: inline-block; width: 3px; height: 0.85em; background: #aaaaaa; vertical-align: text-bottom; margin-left: 3px; animation: blink 0.7s infinite; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 #interim-text { font-size: clamp(11px,1.2vw,16px); color: #333; margin-top: 12px; font-style: italic; min-height: 1.2em; font-family: sans-serif; }
-#debug-badge { position: fixed; bottom: 24px; left: 20px; font-size: 11px; font-family: monospace; color: #555; background: #111; padding: 4px 8px; border-radius: 4px; border: 1px solid #222; pointer-events: none; }
-#mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; }
+
+/* New translation indicator */
+#new-indicator {
+  display: none;
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2ecc71;
+  color: #000;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 20px;
+  border-radius: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  z-index: 100;
+  font-family: sans-serif;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+#debug-badge { position: fixed; bottom: 24px; left: 20px; font-size: 11px; font-family: monospace; color: #555; background: #111; padding: 4px 8px; border-radius: 4px; border: 1px solid #222; pointer-events: none; z-index: 99; }
+#mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; z-index: 99; }
 #mic-indicator.active { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 </style>
@@ -51,16 +88,21 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
   <button id="fullscreenBtn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
 </div>
 <div id="error-box"></div>
+
 <div id="display">
-  <div id="placeholder"><h1>CHIU YANG CHURCH</h1></div>
   <div id="translation-box">
+    <div id="placeholder"><h1>CHIU YANG CHURCH</h1></div>
     <div id="translation-lines"></div>
-    <div id="streaming-line" class="empty">
-      <span id="streaming-text"></span><span id="streaming-cursor" style="display:none"></span>
+    <div id="interim-box">
+      <div id="streaming-line" class="empty">
+        <span id="streaming-text"></span><span id="streaming-cursor" style="display:none"></span>
+      </div>
+      <div id="interim-text"></div>
     </div>
-    <div id="interim-text"></div>
   </div>
 </div>
+
+<div id="new-indicator" onclick="jumpToBottom()">New translation ↓</div>
 <div id="mic-indicator"></div>
 <div id="debug-badge">ready</div>
 
@@ -68,11 +110,12 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 // ── CONFIG ───────────────────────────────────────────────────────────────────
 var WORKER_URL       = 'https://live-translation.pauljkim22.workers.dev';
 var MODEL            = 'claude-sonnet-4-6';
-var SILENCE_MS       = 8000;
+var SILENCE_MS       = 12000;
 var MAX_CHARS        = 500;
 var FORCE_COMMIT_MS  = 20000;
 var PROACTIVE_MS     = 25000;
-var MAX_LINES        = 5;
+var MAX_LINES        = 50; // keep full history
+var isNearBottom     = true;
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
@@ -92,6 +135,23 @@ var translationsRef = db.ref('translations');
 var isOperator      = window.location.search.includes('operator');
 
 function $(id) { return document.getElementById(id); }
+
+// ── SCROLL TRACKING ───────────────────────────────────────────────────────────
+var displayEl = $('display');
+displayEl.addEventListener('scroll', function() {
+  var threshold = 80;
+  isNearBottom = displayEl.scrollHeight - displayEl.scrollTop - displayEl.clientHeight < threshold;
+  if (isNearBottom) $('new-indicator').style.display = 'none';
+});
+
+function scrollToBottom() {
+  displayEl.scrollTo({ top: displayEl.scrollHeight, behavior: 'smooth' });
+}
+
+function jumpToBottom() {
+  scrollToBottom();
+  $('new-indicator').style.display = 'none';
+}
 
 // ── ANONYMOUS AUTH ────────────────────────────────────────────────────────────
 auth.signInAnonymously().catch(function(err) {
@@ -124,17 +184,18 @@ if (!isOperator) {
       }
     });
 
-    translationsRef.limitToLast(10).once('value', function(snap) {
+    translationsRef.limitToLast(50).once('value', function(snap) {
       snap.forEach(function(child) {
         seenKeys.add(child.key);
         var it = child.val();
-        if (it && it.text) displayFinalLine(it.text, true);
+        if (it && it.text) displayFinalLine(it.text);
       });
+      setTimeout(scrollToBottom, 100);
       translationsRef.on('child_added', function(snap) {
         if (seenKeys.has(snap.key)) return;
         seenKeys.add(snap.key);
         var it = snap.val();
-        if (it && it.text) displayFinalLine(it.text, true);
+        if (it && it.text) displayFinalLine(it.text);
       });
     });
   }
@@ -169,6 +230,7 @@ var fullTranscript   = '';
 var cursor           = 0;
 var lastFirebaseKey  = null;
 var lastActivityTime = 0;
+var lastCommittedText = '';
 
 // ── UI HELPERS ────────────────────────────────────────────────────────────────
 function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
@@ -190,31 +252,50 @@ function reclassLines() {
   });
 }
 
-// ── FIX 2: ensure punctuation ─────────────────────────────────────────────────
 function ensurePunctuation(text) {
   if (!text) return text;
   text = text.trim();
-  // Balance quotation marks
-  var opens  = (text.match(/"/g) || []).length;
-  var closes = (text.match(/"/g) || []).length;
-  var straight = (text.match(/"/g) || []).length;
-  if (opens > closes) text = text + '\u201d';
-  if (straight % 2 !== 0) text = text + '"';
-  // Ensure ending punctuation
-  if (/[.!?]"?\u201d?$/.test(text)) return text;
-  if (text.endsWith('\u201d') || text.endsWith('"')) return text.slice(0, -1) + '."';
+  var straightCount  = (text.match(/"/g) || []).length;
+  var hasOpenStraight = straightCount % 2 !== 0;
+  var curlyOpen  = (text.match(/\u201c/g) || []).length;
+  var curlyClose = (text.match(/\u201d/g) || []).length;
+  var hasOpenCurly = curlyOpen > curlyClose;
+  var needsCloseQuote = hasOpenStraight || hasOpenCurly;
+  var closeQ = hasOpenCurly ? '\u201d' : '"';
+  if (/[.!?]["'\u201d]?$/.test(text)) {
+    if (needsCloseQuote && !/["'\u201d]$/.test(text)) return text + closeQ;
+    return text;
+  }
+  if (/["\u201d]$/.test(text)) return text.slice(0, -1) + '."';
+  if (needsCloseQuote) return text + '.' + closeQ;
   return text + '.';
 }
 
-function displayFinalLine(text, skipFirebase) {
+function displayFinalLine(text) {
   $('placeholder').style.display = 'none';
   var linesEl = $('translation-lines');
+
   var div = document.createElement('div');
-  div.className   = 'tline newest';
+  div.className   = 'tline newest entering';
   div.textContent = text;
   linesEl.appendChild(div);
+
+  // Trigger slide-up animation
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      div.classList.remove('entering');
+    });
+  });
+
   while (linesEl.children.length > MAX_LINES) linesEl.removeChild(linesEl.firstChild);
   reclassLines();
+
+  if (isNearBottom) {
+    setTimeout(scrollToBottom, 50);
+  } else {
+    $('new-indicator').style.display = 'block';
+  }
+
   return div;
 }
 
@@ -234,11 +315,13 @@ function clearTranslations() {
   $('translation-lines').innerHTML = '';
   setStreamingText('');
   fullTranscript = ''; cursor = 0;
-  lastFirebaseKey = null;
+  lastFirebaseKey  = null;
+  lastCommittedText = '';
   translationQueue = [];
   autoSermonContext = '';
   contextUpdateCounter = 0;
   $('placeholder').style.display = 'block';
+  $('new-indicator').style.display = 'none';
 }
 
 // ── SPEECH RECOGNITION ────────────────────────────────────────────────────────
@@ -265,7 +348,6 @@ function startListening() {
   scheduleProactiveSwap();
 }
 
-// ── PROACTIVE MIC SWAP ────────────────────────────────────────────────────────
 function scheduleProactiveSwap() {
   clearTimeout(proactiveTimer);
   proactiveTimer = setTimeout(doProactiveSwap, PROACTIVE_MS);
@@ -276,24 +358,18 @@ function doProactiveSwap() {
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
   dbg('proactive swap');
-
   var unsent = fullTranscript.slice(cursor).trim();
   if (unsent) commitTranslation();
-
   recNext = new SR();
   recNext.lang           = 'ko-KR';
   recNext.continuous     = true;
   recNext.interimResults = true;
   wireRecHandlers(recNext);
-
   if (rec) { try { rec.onend = null; rec.stop(); } catch(e) {} rec = null; }
-
   setTimeout(function() {
     if (!isListening) return;
-    rec     = recNext;
-    recNext = null;
-    fullTranscript   = '';
-    cursor           = 0;
+    rec = recNext; recNext = null;
+    fullTranscript = ''; cursor = 0;
     lastActivityTime = Date.now();
     try { rec.start(); } catch(e) {}
     scheduleForceCommit();
@@ -335,13 +411,10 @@ function wireRecHandlers(r) {
     }
     fullTranscript = (full + interimText).trim();
     var unsent = fullTranscript.slice(cursor).trim();
-
     $('interim-text').textContent = interimText
       ? '"' + interimText.trim() + '"'
       : (unsent ? '"' + unsent + '"' : '');
-
     dbg('len:' + fullTranscript.length + ' cursor:' + cursor + ' unsent:' + unsent.length + ' q:' + translationQueue.length);
-
     if (!unsent) return;
     clearTimeout(silenceTimer);
     if (unsent.length >= MAX_CHARS) { commitTranslation(); return; }
@@ -359,7 +432,7 @@ function wireRecHandlers(r) {
     var unsent = fullTranscript.slice(cursor).trim();
     if (unsent) enqueueTranslation(unsent);
     fullTranscript = ''; cursor = 0;
-    clearTimeout(silenceTimer);    silenceTimer    = null;
+    clearTimeout(silenceTimer);     silenceTimer     = null;
     clearTimeout(forceCommitTimer); forceCommitTimer = null;
     setTimeout(spawnRec, 150);
   };
@@ -389,7 +462,10 @@ function commitTranslation() {
 
 function enqueueTranslation(text) {
   if (!text || text.trim().length < 10) return;
-  translationQueue.push(text);
+  var t = text.trim();
+  if (t === lastCommittedText.trim()) { dbg('dedup skip'); return; }
+  lastCommittedText = t;
+  translationQueue.push(t);
   processQueue();
 }
 
@@ -400,19 +476,17 @@ function processQueue() {
 
 function stopListening() {
   isListening = false;
-  clearTimeout(silenceTimer);    silenceTimer    = null;
+  clearTimeout(silenceTimer);     silenceTimer     = null;
   clearTimeout(forceCommitTimer); forceCommitTimer = null;
   clearTimeout(proactiveTimer);   proactiveTimer   = null;
   clearInterval(watchdogTimer);   watchdogTimer    = null;
-
   if (rec)     { try { rec.onend     = null; rec.stop();     } catch(e) {} rec     = null; }
   if (recNext) { try { recNext.onend = null; recNext.stop(); } catch(e) {} recNext = null; }
-
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
   $('mic-indicator').classList.remove('active');
   $('interim-text').textContent = '';
-  fullTranscript = ''; cursor = 0;
+  fullTranscript = ''; cursor = 0; lastCommittedText = '';
   setStatus('Stopped');
 }
 
@@ -420,17 +494,13 @@ function stopListening() {
 function updateSermonContext() {
   contextUpdateCounter++;
   if (contextUpdateCounter % 3 !== 0) return;
-
   var recentLines = historyLog.slice(-6).join(' ');
   if (!recentLines) return;
-
   fetch(WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model:      MODEL,
-      max_tokens: 80,
-      stream:     false,
+      model: MODEL, max_tokens: 80, stream: false,
       system: 'You are summarizing a live sermon for use as translation context. '
         + 'Given the recent translated lines, write a single short sentence (max 20 words) '
         + 'describing the current topic, speaker situation, and any key context that would help '
@@ -453,17 +523,13 @@ async function triggerTranslation(text) {
 
   var safetyTimeout = setTimeout(function() {
     if (!isTranslating) return;
-    isTranslating = false;
-    setStatus('🎤 Listening...', 'listening');
-    dbg('safety timeout fired');
-    processQueue();
+    isTranslating = false; setStatus('🎤 Listening...', 'listening');
+    dbg('safety timeout fired'); processQueue();
   }, 30000);
 
   var unlockTimeout = setTimeout(function() {
     if (!isTranslating) return;
-    isTranslating = false;
-    dbg('force unlocked');
-    processQueue();
+    isTranslating = false; dbg('force unlocked'); processQueue();
   }, 35000);
 
   var manualTopic = $('sermonContext').value.trim();
@@ -526,10 +592,8 @@ async function triggerTranslation(text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model:      MODEL,
-        max_tokens: 600,
-        stream:     false,
-        system:     systemPrompt,
+        model: MODEL, max_tokens: 600, stream: false,
+        system: systemPrompt,
         messages: [{ role: 'user', content: topicLine + contextLine + historyStr + 'Translate:\n' + text }]
       })
     });
@@ -540,9 +604,7 @@ async function triggerTranslation(text) {
     if (!res.ok) {
       var errData = await res.json().catch(function() { return {}; });
       showError('API error: ' + (errData && errData.error ? errData.error.message : 'HTTP ' + res.status));
-      isTranslating = false;
-      setStatus('🎤 Listening...', 'listening');
-      processQueue();
+      isTranslating = false; setStatus('🎤 Listening...', 'listening'); processQueue();
       return;
     }
 
@@ -564,14 +626,13 @@ async function triggerTranslation(text) {
 
     if (result) {
       if (!operatorAuthReady) {
-        // Auth not ready yet — requeue and retry shortly
         setTimeout(function() { triggerTranslation(result); }, 500);
         isTranslating = false;
         return;
       }
       var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
       lastFirebaseKey = newRef.key;
-      displayFinalLine(result, true);
+      displayFinalLine(result);
       pushHistory(result);
       updateSermonContext();
     }
@@ -585,9 +646,7 @@ async function triggerTranslation(text) {
     clearTimeout(safetyTimeout);
     clearTimeout(unlockTimeout);
     if (err.name !== 'AbortError') showError('Network error: ' + err.message);
-    isTranslating = false;
-    setStatus('🎤 Listening...', 'listening');
-    processQueue();
+    isTranslating = false; setStatus('🎤 Listening...', 'listening'); processQueue();
   }
 }
 </script>
