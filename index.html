@@ -25,7 +25,7 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
 #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
 #translation-box { width: 100%; max-width: 1200px; text-align: center; }
-#translation-lines { display: flex; flex-direction: column; gap: 32px; margin-bottom: 12px; }
+#translation-lines { display: flex; flex-direction: column; gap: 48px; margin-bottom: 12px; }
 .tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); overflow: hidden; transition: color 0.8s, opacity 0.8s; }
 .tline.newest { color: #ffffff; }
 .tline.oldest { color: #555555; }
@@ -73,7 +73,6 @@ var MAX_CHARS        = 500;
 var FORCE_COMMIT_MS  = 20000;
 var PROACTIVE_MS     = 25000;
 var MAX_LINES        = 5;
-var BUFFER_FLUSH_MS  = 9000;  // wait longer than a typical translation round-trip
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
@@ -166,8 +165,6 @@ var fullTranscript   = '';
 var cursor           = 0;
 var lastFirebaseKey  = null;
 var lastActivityTime = 0;
-var pendingBuffer    = '';
-var flushTimer       = null;
 
 // ── UI HELPERS ────────────────────────────────────────────────────────────────
 function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
@@ -189,70 +186,38 @@ function reclassLines() {
   });
 }
 
-// ── PUNCTUATION FIX ───────────────────────────────────────────────────────────
-function fixPunctuation(text) {
+// ── FIX 2: ensure punctuation at end of translation ──────────────────────────
+function ensurePunctuation(text) {
   if (!text) return text;
-  var t = text.trim();
-
-  // Count double quotes to detect open/unclosed quote
-  var quoteCount = (t.match(/"/g) || []).length;
-  var openQuote  = quoteCount % 2 !== 0;
-
-  var last = t.slice(-1);
-
-  // Already ends with .!? followed optionally by closing quote — good
-  if (/[.!?]["\u201D]?$/.test(t)) {
-    // If ends with just ." or !" or ?" → fine as-is
-    return t;
-  }
-
-  // Ends with closing quote but no punctuation before it e.g. [word"]
-  if (last === '"' || last === '\u201D') {
-    var beforeQuote = t.slice(-2, -1);
-    if (!/[.!?]/.test(beforeQuote)) {
-      return t.slice(0, -1) + '."';
-    }
-    return t;
-  }
-
-  // Open/unclosed quote — close it with ."
-  if (openQuote) {
-    return t + '."';
-  }
-
-  // Ends with any other non-punctuation — add period
-  if (!/[.!?]$/.test(t)) {
-    return t + '.';
-  }
-
-  return t;
+  // Strip trailing whitespace first
+  text = text.trim();
+  // If already ends with valid punctuation, leave it alone
+  if (/[.!?]"?$/.test(text)) return text;
+  // If it ends with a closing quote, add period before it
+  if (text.endsWith('"')) return text.slice(0, -1) + '."';
+  // Otherwise append a period
+  return text + '.';
 }
 
-function flushBuffer() {
-  clearTimeout(flushTimer); flushTimer = null;
-  if (!pendingBuffer) return;
-  var text = pendingBuffer;
-  pendingBuffer = '';
-  var newRef = translationsRef.push({ text: text, timestamp: firebase.database.ServerValue.TIMESTAMP });
-  lastFirebaseKey = newRef.key;
-  displayFinalLine(text, true);
-  pushHistory(text);
-  updateSermonContext();
-}
-
-function bufferResult(result) {
-  pendingBuffer = pendingBuffer ? pendingBuffer + ' ' + result : result;
-  if (pendingBuffer.length >= SHORT_LINE_CHARS) {
-    flushBuffer();
-  } else {
-    clearTimeout(flushTimer);
-    flushTimer = setTimeout(flushBuffer, BUFFER_FLUSH_MS);
-  }
-}
+function displayFinalLine(text, skipFirebase) {
   $('placeholder').style.display = 'none';
-  var linesEl = $('translation-lines');
+  var linesEl  = $('translation-lines');
+  var lastLine = linesEl.lastChild;
 
-  // Every chunk is always a new line — no merging
+  // Merge into previous paragraph if it's still short (under 300 chars)
+  if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < 300) {
+    var merged = lastLine.textContent + ' ' + text;
+    lastLine.style.opacity = '0.5';
+    setTimeout(function() {
+      if (!lastLine || !lastLine.parentNode) return;
+      lastLine.textContent   = merged;
+      lastLine.style.opacity = '1';
+    }, 200);
+    if (!skipFirebase && lastFirebaseKey) translationsRef.child(lastFirebaseKey).update({ text: merged });
+    reclassLines();
+    return lastLine;
+  }
+
   var div = document.createElement('div');
   div.className   = 'tline newest';
   div.textContent = text;
@@ -282,8 +247,6 @@ function clearTranslations() {
   translationQueue = [];
   autoSermonContext = '';
   contextUpdateCounter = 0;
-  pendingBuffer = '';
-  clearTimeout(flushTimer); flushTimer = null;
   $('placeholder').style.display = 'block';
 }
 
@@ -554,6 +517,9 @@ async function triggerTranslation(text) {
     + 'words or transitional expressions (e.g. 아/음/그/네 → "Yes" / "And" / omit gracefully). '
     + 'If the input is genuinely unintelligible noise, respond with a single space " ". '
     + 'Never skip or omit a response.\n\n'
+    + 'PUNCTUATION: Always end your translation with a sentence-ending punctuation mark: '
+    + 'a period (.), exclamation point (!), or question mark (?). '
+    + 'If the translation ends with a closing quotation mark, the punctuation goes inside: ." or !" or ?"\n\n'
     + 'Common Korean Bible books: 창세기(Genesis) 출애굽기(Exodus) 레위기(Leviticus) 민수기(Numbers) '
     + '신명기(Deuteronomy) 여호수아(Joshua) 사사기(Judges) 룻기(Ruth) 사무엘상하(1-2Samuel) '
     + '열왕기상하(1-2Kings) 역대상하(1-2Chronicles) 에스라(Ezra) 느헤미야(Nehemiah) 에스더(Esther) '
@@ -602,11 +568,16 @@ async function triggerTranslation(text) {
       } else {
         result = result.replace(/[\s,\-–—]+$/, '').trim();
       }
+      // FIX 2: guarantee punctuation as a safety net
+      result = ensurePunctuation(result);
     }
 
     if (result) {
-      result = fixPunctuation(result);
-      bufferResult(result);
+      var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
+      lastFirebaseKey = newRef.key;
+      displayFinalLine(result, true);
+      pushHistory(result);
+      updateSermonContext();
     }
 
     isTranslating = false;
