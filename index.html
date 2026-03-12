@@ -523,7 +523,8 @@ function updateSermonContext() {
 }
 
 // ── TRANSLATION ───────────────────────────────────────────────────────────────
-async function triggerTranslation(text) {
+async function triggerTranslation(text, retryCount) {
+  retryCount = retryCount || 0;
   isTranslating = true;
   setStatus('Translating...', 'translating');
   clearError();
@@ -610,7 +611,19 @@ async function triggerTranslation(text) {
 
     if (!res.ok) {
       var errData = await res.json().catch(function() { return {}; });
-      showError('API error: ' + (errData && errData.error ? errData.error.message : 'HTTP ' + res.status));
+      var status = res.status;
+      // Retry on 529 (overloaded) up to 4 times with exponential backoff
+      if (status === 529 && retryCount < 4) {
+        var delay = Math.pow(2, retryCount) * 2000; // 2s, 4s, 8s, 16s
+        dbg('overloaded, retry ' + (retryCount + 1) + ' in ' + (delay/1000) + 's');
+        setStatus('Retrying...', 'translating');
+        clearTimeout(safetyTimeout);
+        clearTimeout(unlockTimeout);
+        isTranslating = false;
+        setTimeout(function() { triggerTranslation(text, retryCount + 1); }, delay);
+        return;
+      }
+      showError('API error: ' + (errData && errData.error ? errData.error.message : 'HTTP ' + status));
       isTranslating = false; setStatus('🎤 Listening...', 'listening'); processQueue();
       return;
     }
