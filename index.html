@@ -204,16 +204,15 @@ function displayFinalLine(text, skipFirebase) {
   var linesEl  = $('translation-lines');
   var lastLine = linesEl.lastChild;
 
-  // Merge into previous paragraph if it's still short (under 300 chars)
   if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < 300) {
     var merged = lastLine.textContent + ' ' + text;
     lastLine.style.opacity = '0.5';
     setTimeout(function() {
-      if (!lastLine || !lastLine.parentNode) return;
+      if (!lastLine || !lastLine.parentNode) { return; }
       lastLine.textContent   = merged;
       lastLine.style.opacity = '1';
     }, 200);
-    if (!skipFirebase && lastFirebaseKey) translationsRef.child(lastFirebaseKey).update({ text: merged });
+    if (!skipFirebase && lastFirebaseKey) { translationsRef.child(lastFirebaseKey).update({ text: merged }); }
     reclassLines();
     return lastLine;
   }
@@ -222,7 +221,7 @@ function displayFinalLine(text, skipFirebase) {
   div.className   = 'tline newest';
   div.textContent = text;
   linesEl.appendChild(div);
-  while (linesEl.children.length > MAX_LINES) linesEl.removeChild(linesEl.firstChild);
+  while (linesEl.children.length > MAX_LINES) { linesEl.removeChild(linesEl.firstChild); }
   reclassLines();
   return div;
 }
