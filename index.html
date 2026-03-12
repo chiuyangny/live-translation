@@ -6,41 +6,41 @@
 <title>Live Translation</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0a0a0a; color: #f0f0f0; font-family: 'Georgia', serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-  #controls { background: #111; border-bottom: 1px solid #222; padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
-  input[type="text"] { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; color: #f0f0f0; padding: 6px 10px; font-size: 13px; width: 260px; }
-  button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; font-weight: 600; }
-  #startBtn { background: #2ecc71; color: #000; }
-  #startBtn.active { background: #e74c3c; color: #fff; }
-  #fullscreenBtn { background: #333; color: #ccc; margin-left: auto; }
-  #status { font-size: 12px; color: #666; min-width: 160px; }
-  #status.listening { color: #2ecc71; }
-  #status.translating { color: #aaaaaa; }
-  #status.error { color: #e74c3c; }
-  #error-box { display: none; background: #1a0000; border: 1px solid #500; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #ff6b6b; margin: 6px 20px; font-family: monospace; word-break: break-all; flex-shrink: 0; }
-  #display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 40px; position: relative; overflow: hidden; }
-  #placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
-  #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
-  #translation-box { width: 100%; max-width: 1200px; text-align: center; }
-  #translation-lines { display: flex; flex-direction: column; gap: 14px; margin-bottom: 12px; }
-  .tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); overflow: hidden; transition: color 0.8s, opacity 0.8s; }
-  .tline.newest { color: #ffffff; }
-  .tline.oldest { color: #555555; }
-  #streaming-line { font-size: clamp(18px,2.5vw,36px); line-height: 1.4; color: #aaaaaa; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.4em; transition: opacity 0.3s; }
-  #streaming-line.empty { opacity: 0; }
-  #streaming-cursor { display: inline-block; width: 3px; height: 0.85em; background: #aaaaaa; vertical-align: text-bottom; margin-left: 3px; animation: blink 0.7s infinite; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-  #interim-text { font-size: clamp(11px,1.2vw,16px); color: #333; margin-top: 12px; font-style: italic; min-height: 1.2em; font-family: sans-serif; }
-  #debug-badge { position: fixed; bottom: 24px; left: 20px; font-size: 11px; font-family: monospace; color: #555; background: #111; padding: 4px 8px; border-radius: 4px; border: 1px solid #222; pointer-events: none; }
-  #mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; }
-  #mic-indicator.active { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #f0f0f0; font-family: 'Georgia', serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+#controls { background: #111; border-bottom: 1px solid #222; padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
+input[type="text"] { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; color: #f0f0f0; padding: 6px 10px; font-size: 13px; width: 260px; }
+button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; font-weight: 600; }
+#startBtn { background: #2ecc71; color: #000; }
+#startBtn.active { background: #e74c3c; color: #fff; }
+#fullscreenBtn { background: #333; color: #ccc; margin-left: auto; }
+#status { font-size: 12px; color: #666; min-width: 160px; }
+#status.listening { color: #2ecc71; }
+#status.translating { color: #aaaaaa; }
+#status.error { color: #e74c3c; }
+#error-box { display: none; background: #1a0000; border: 1px solid #500; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #ff6b6b; margin: 6px 20px; font-family: monospace; word-break: break-all; flex-shrink: 0; }
+#display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 40px; position: relative; overflow: hidden; }
+#placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #2a2a2a; pointer-events: none; }
+#placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
+#translation-box { width: 100%; max-width: 1200px; text-align: center; }
+#translation-lines { display: flex; flex-direction: column; gap: 14px; margin-bottom: 12px; }
+.tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); overflow: hidden; transition: color 0.8s, opacity 0.8s; }
+.tline.newest { color: #ffffff; }
+.tline.oldest { color: #555555; }
+#streaming-line { font-size: clamp(18px,2.5vw,36px); line-height: 1.4; color: #aaaaaa; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.4em; transition: opacity 0.3s; }
+#streaming-line.empty { opacity: 0; }
+#streaming-cursor { display: inline-block; width: 3px; height: 0.85em; background: #aaaaaa; vertical-align: text-bottom; margin-left: 3px; animation: blink 0.7s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+#interim-text { font-size: clamp(11px,1.2vw,16px); color: #333; margin-top: 12px; font-style: italic; min-height: 1.2em; font-family: sans-serif; }
+#debug-badge { position: fixed; bottom: 24px; left: 20px; font-size: 11px; font-family: monospace; color: #555; background: #111; padding: 4px 8px; border-radius: 4px; border: 1px solid #222; pointer-events: none; }
+#mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; }
+#mic-indicator.active { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 </style>
 </head>
 <body>
-
 <div id="controls">
   <label style="font-size:13px;color:#888;">Sermon topic:</label>
   <input type="text" id="sermonContext" placeholder="e.g. John 3:16, faith, grace" />
@@ -50,7 +50,6 @@
   <button id="fullscreenBtn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
 </div>
 <div id="error-box"></div>
-
 <div id="display">
   <div id="placeholder"><h1>CHIU YANG CHURCH</h1></div>
   <div id="translation-box">
@@ -67,116 +66,147 @@
 <script>
 // ── CONFIG ───────────────────────────────────────────────────────────────────
 var WORKER_URL      = 'https://live-translation.pauljkim22.workers.dev';
-var MODEL           = 'claude-sonnet-4-6';  // pin this — update manually if needed
-var SILENCE_MS      = 8000;   // ms of silence before committing
-var MAX_CHARS       = 500;    // effectively disabled — silence + force commit drive timing
-var FORCE_COMMIT_MS = 20000;  // hard commit every N ms during continuous speech
+var MODEL           = 'claude-sonnet-4-6';
+var SILENCE_MS      = 8000;
+var MAX_CHARS       = 500;
+var FORCE_COMMIT_MS = 20000;
+var PROACTIVE_MS    = 25000;   // proactive mic swap interval
 var MAX_LINES       = 5;
 var SHORT_LINE_CHARS = 120;
+var MAX_RETRIES     = 2;       // translation retry attempts
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
 var firebaseConfig = {
-  apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
-  authDomain: "live-translation-fd583.firebaseapp.com",
-  databaseURL: "https://live-translation-fd583-default-rtdb.firebaseio.com",
-  projectId: "live-translation-fd583",
-  storageBucket: "live-translation-fd583.firebasestorage.app",
+  apiKey:            "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
+  authDomain:        "live-translation-fd583.firebaseapp.com",
+  databaseURL:       "https://live-translation-fd583-default-rtdb.firebaseio.com",
+  projectId:         "live-translation-fd583",
+  storageBucket:     "live-translation-fd583.firebasestorage.app",
   messagingSenderId: "189364035896",
-  appId: "1:189364035896:web:552700e29449859089a1cd"
+  appId:             "1:189364035896:web:552700e29449859089a1cd"
 };
+
 firebase.initializeApp(firebaseConfig);
-var db = firebase.database();
+var db             = firebase.database();
+var auth           = firebase.auth();
 var translationsRef = db.ref('translations');
-var isOperator = window.location.search.includes('operator');
+var isOperator     = window.location.search.includes('operator');
 
 function $(id) { return document.getElementById(id); }
 
+// ── ANONYMOUS AUTH (both operator and viewer) ─────────────────────────────────
+auth.signInAnonymously().catch(function(err) {
+  if (isOperator) showError('Auth error: ' + err.message);
+  else console.warn('Auth error:', err.message);
+});
+
+auth.onAuthStateChanged(function(user) {
+  if (user) {
+    dbg('auth:' + user.uid.slice(0,8));
+    if (!isOperator) initViewer();
+  }
+});
+
 // ── VIEWER ───────────────────────────────────────────────────────────────────
+function initViewer() {
+  $('controls').style.display    = 'none';
+  $('error-box').style.display   = 'none';
+  $('streaming-line').style.display = 'none';
+  $('interim-text').style.display   = 'none';
+  $('debug-badge').style.display    = 'none';
+
+  var seenKeys = new Set();
+
+  translationsRef.limitToLast(10).once('value', function(snap) {
+    snap.forEach(function(child) {
+      seenKeys.add(child.key);
+      var it = child.val();
+      if (it && it.text) displayFinalLine(it.text, true);
+    });
+
+    translationsRef.on('child_added', function(snap) {
+      if (seenKeys.has(snap.key)) return;
+      seenKeys.add(snap.key);
+      var it = snap.val();
+      if (it && it.text) displayFinalLine(it.text, true);
+    });
+  });
+
+  translationsRef.on('value', function(snap) {
+    if (!snap.val()) {
+      $('translation-lines').innerHTML = '';
+      $('placeholder').style.display   = 'block';
+      seenKeys.clear();
+    }
+  });
+}
+
+// Run viewer immediately if not operator (auth callback handles it above,
+// but guard for cases where auth resolves before DOMContentLoaded)
 if (!isOperator) {
-  document.addEventListener('DOMContentLoaded', function () {
-    $('controls').style.display = 'none';
-    $('error-box').style.display = 'none';
-    $('streaming-line').style.display = 'none';
-    $('interim-text').style.display = 'none';
-    $('debug-badge').style.display = 'none';
-    var seenKeys = new Set();
-    translationsRef.limitToLast(10).once('value', function (snap) {
-      snap.forEach(function (child) {
-        seenKeys.add(child.key);
-        var it = child.val();
-        if (it && it.text) displayFinalLine(it.text, true);
-      });
-      translationsRef.on('child_added', function (snap) {
-        if (seenKeys.has(snap.key)) return;
-        seenKeys.add(snap.key);
-        var it = snap.val();
-        if (it && it.text) displayFinalLine(it.text, true);
-      });
-    });
-    translationsRef.on('value', function (snap) {
-      if (!snap.val()) {
-        $('translation-lines').innerHTML = '';
-        $('placeholder').style.display = 'block';
-        seenKeys.clear();
-      }
-    });
+  document.addEventListener('DOMContentLoaded', function() {
+    // initViewer() will be called by onAuthStateChanged; nothing extra needed
   });
 }
 
 // ── OPERATOR STATE ───────────────────────────────────────────────────────────
-var rec                  = null;
-var isListening          = false;
-var silenceTimer         = null;
-var forceCommitTimer     = null;
-var watchdogTimer        = null;
-var isTranslating        = false;
-var translationQueue     = [];
-var historyLog           = [];
-var autoSermonContext    = '';
+var rec             = null;
+var recNext         = null;   // pre-warmed instance
+var isListening     = false;
+var silenceTimer    = null;
+var forceCommitTimer = null;
+var watchdogTimer   = null;
+var proactiveTimer  = null;
+var isTranslating   = false;
+var translationQueue = [];
+var historyLog      = [];
+var autoSermonContext = '';
 var contextUpdateCounter = 0;
-var fullTranscript       = '';
-var cursor               = 0;
-var lastFirebaseKey      = null;
-var lastActivityTime     = 0;
+var fullTranscript  = '';
+var cursor          = 0;
+var lastFirebaseKey = null;
+var lastActivityTime = 0;
 
 // ── UI HELPERS ───────────────────────────────────────────────────────────────
-function showError(msg) { $('error-box').style.display = 'block'; $('error-box').textContent = msg; setStatus('Error', 'error'); }
-function clearError()   { $('error-box').style.display = 'none'; }
-function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
-function dbg(msg) { var el = $('debug-badge'); if (el) el.textContent = msg; }
+function showError(msg) { $('error-box').style.display='block'; $('error-box').textContent=msg; setStatus('Error','error'); }
+function clearError()   { $('error-box').style.display='none'; }
+function setStatus(msg,cls) { $('status').textContent=msg; $('status').className=cls||''; }
+function dbg(msg)       { var el=$('debug-badge'); if(el) el.textContent=msg; }
 
 function toggleFullscreen() {
-  if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); $('controls').style.display = 'none'; }
-  else { document.exitFullscreen(); $('controls').style.display = 'flex'; }
+  if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); $('controls').style.display='none'; }
+  else { document.exitFullscreen(); $('controls').style.display='flex'; }
 }
 
 function reclassLines() {
   var all = $('translation-lines').querySelectorAll('.tline');
-  all.forEach(function (el, i) {
-    el.classList.remove('newest', 'oldest');
-    if (all.length - 1 - i <= 2) el.classList.add('newest');
+  all.forEach(function(el,i) {
+    el.classList.remove('newest','oldest');
+    if (all.length-1-i <= 2) el.classList.add('newest');
     else el.classList.add('oldest');
   });
 }
 
 function displayFinalLine(text, skipFirebase) {
   $('placeholder').style.display = 'none';
-  var linesEl = $('translation-lines');
+  var linesEl  = $('translation-lines');
   var lastLine = linesEl.lastChild;
+
   if (lastLine && lastLine.classList.contains('tline') && lastLine.textContent.length < SHORT_LINE_CHARS) {
     var merged = lastLine.textContent + ' ' + text;
     lastLine.style.opacity = '0.5';
-    setTimeout(function () {
+    setTimeout(function() {
       if (!lastLine || !lastLine.parentNode) return;
-      lastLine.textContent = merged;
+      lastLine.textContent  = merged;
       lastLine.style.opacity = '1';
     }, 200);
     if (!skipFirebase && lastFirebaseKey) translationsRef.child(lastFirebaseKey).update({ text: merged });
     reclassLines();
     return lastLine;
   }
+
   var div = document.createElement('div');
-  div.className = 'tline newest';
+  div.className   = 'tline newest';
   div.textContent = text;
   linesEl.appendChild(div);
   while (linesEl.children.length > MAX_LINES) linesEl.removeChild(linesEl.firstChild);
@@ -190,21 +220,24 @@ function pushHistory(text) {
 }
 
 function setStreamingText(text) {
-  var el = $('streaming-line'), t = $('streaming-text'), cur = $('streaming-cursor');
-  if (!text) { el.classList.add('empty'); t.textContent = ''; cur.style.display = 'none'; }
-  else { $('placeholder').style.display = 'none'; el.classList.remove('empty'); t.textContent = text; cur.style.display = 'inline-block'; }
+  var el=_$('streaming-line'), t=$('streaming-text'), cur=$('streaming-cursor');
+  if (!text) { el.classList.add('empty'); t.textContent=''; cur.style.display='none'; }
+  else { $('placeholder').style.display='none'; el.classList.remove('empty'); t.textContent=text; cur.style.display='inline-block'; }
 }
+
+// tiny helper to avoid shadowing the global $
+function _$(id) { return document.getElementById(id); }
 
 function clearTranslations() {
   translationsRef.remove();
   $('translation-lines').innerHTML = '';
   setStreamingText('');
-  fullTranscript = ''; cursor = 0;
-  lastFirebaseKey = null;
-  translationQueue = [];
-  autoSermonContext = '';
-  contextUpdateCounter = 0;
-  $('placeholder').style.display = 'block';
+  fullTranscript=''; cursor=0;
+  lastFirebaseKey=null;
+  translationQueue=[];
+  autoSermonContext='';
+  contextUpdateCounter=0;
+  $('placeholder').style.display='block';
 }
 
 // ── SPEECH RECOGNITION ───────────────────────────────────────────────────────
@@ -214,27 +247,75 @@ function startListening() {
   clearError();
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showError('Please use Google Chrome.'); return; }
-  isListening = true;
-  fullTranscript = '';
-  cursor = 0;
+
+  isListening      = true;
+  fullTranscript   = '';
+  cursor           = 0;
   translationQueue = [];
   lastActivityTime = Date.now();
+
   $('startBtn').textContent = '■ Stop';
   $('startBtn').classList.add('active');
   $('mic-indicator').classList.add('active');
-  setStatus('🎤 Listening…', 'listening');
+  setStatus('🎤 Listening...', 'listening');
+
   spawnRec();
   startWatchdog();
+  scheduleProactiveSwap();
+}
+
+// ── PROACTIVE MIC SWAP ───────────────────────────────────────────────────────
+function scheduleProactiveSwap() {
+  clearTimeout(proactiveTimer);
+  proactiveTimer = setTimeout(doProactiveSwap, PROACTIVE_MS);
+}
+
+function doProactiveSwap() {
+  if (!isListening) return;
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+
+  dbg('proactive swap');
+
+  // Commit anything unsent before swapping
+  var unsent = fullTranscript.slice(cursor).trim();
+  if (unsent) commitTranslation();
+
+  // Pre-warm next instance
+  recNext = new SR();
+  recNext.lang          = 'ko-KR';
+  recNext.continuous    = true;
+  recNext.interimResults = true;
+  wireRecHandlers(recNext);
+
+  // Gracefully stop current; onend will NOT restart (we pass control to recNext)
+  if (rec) {
+    try { rec.onend = null; rec.stop(); } catch(e) {}
+    rec = null;
+  }
+
+  // Small gap to let the browser release the mic, then activate pre-warmed instance
+  setTimeout(function() {
+    if (!isListening) return;
+    rec     = recNext;
+    recNext = null;
+    fullTranscript = ''; cursor = 0;
+    lastActivityTime = Date.now();
+    try { rec.start(); } catch(e) {}
+    scheduleForceCommit();
+    scheduleProactiveSwap();   // schedule the next proactive swap
+  }, 150);
 }
 
 function startWatchdog() {
   clearInterval(watchdogTimer);
-  watchdogTimer = setInterval(function () {
+  watchdogTimer = setInterval(function() {
     if (!isListening) { clearInterval(watchdogTimer); return; }
     if (Date.now() - lastActivityTime > 5000) {
       dbg('watchdog restart');
-      if (rec) { try { rec.onend = null; rec.stop(); } catch (e) {} rec = null; }
-      fullTranscript = ''; cursor = 0;
+      if (rec) { try { rec.onend=null; rec.stop(); } catch(e) {} rec=null; }
+      fullTranscript=''; cursor=0;
       lastActivityTime = Date.now();
       setTimeout(spawnRec, 150);
     }
@@ -251,30 +332,22 @@ function scheduleForceCommit() {
   }, FORCE_COMMIT_MS);
 }
 
-function spawnRec() {
-  if (!isListening) return;
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  rec = new SR();
-  rec.lang = 'ko-KR';
-  rec.continuous = true;
-  rec.interimResults = true;
-  scheduleForceCommit();
-
-  rec.onresult = function (e) {
+function wireRecHandlers(r) {
+  r.onresult = function(e) {
     lastActivityTime = Date.now();
-    var full = '';
-    var interimText = '';
-    for (var i = 0; i < e.results.length; i++) {
+    var full='', interimText='';
+    for (var i=0; i<e.results.length; i++) {
       if (e.results[i].isFinal) full += e.results[i][0].transcript;
       else interimText += e.results[i][0].transcript;
     }
     fullTranscript = (full + interimText).trim();
-
     var unsent = fullTranscript.slice(cursor).trim();
+
     $('interim-text').textContent = interimText
       ? '"' + interimText.trim() + '"'
       : (unsent ? '"' + unsent + '"' : '');
-    dbg('len:' + fullTranscript.length + ' cursor:' + cursor + ' unsent:' + unsent.length + ' q:' + translationQueue.length);
+
+    dbg('len:'+fullTranscript.length+' cursor:'+cursor+' unsent:'+unsent.length+' q:'+translationQueue.length);
 
     if (!unsent) return;
     clearTimeout(silenceTimer);
@@ -282,27 +355,37 @@ function spawnRec() {
     silenceTimer = setTimeout(commitTranslation, SILENCE_MS);
   };
 
-  rec.onerror = function (e) {
-    if (e.error === 'no-speech' || e.error === 'aborted') return;
-    if (e.error === 'not-allowed') { showError('Microphone access denied.'); stopListening(); }
+  r.onerror = function(e) {
+    if (e.error==='no-speech' || e.error==='aborted') return;
+    if (e.error==='not-allowed') { showError('Microphone access denied.'); stopListening(); }
   };
 
-  rec.onend = function () {
+  r.onend = function() {
     lastActivityTime = Date.now();
     if (!isListening) return;
     var unsent = fullTranscript.slice(cursor).trim();
     if (unsent) enqueueTranslation(unsent);
-    fullTranscript = ''; cursor = 0;
-    clearTimeout(silenceTimer); silenceTimer = null;
-    clearTimeout(forceCommitTimer); forceCommitTimer = null;
+    fullTranscript=''; cursor=0;
+    clearTimeout(silenceTimer);   silenceTimer=null;
+    clearTimeout(forceCommitTimer); forceCommitTimer=null;
     setTimeout(spawnRec, 150);
   };
+}
 
-  try { rec.start(); } catch (e) {}
+function spawnRec() {
+  if (!isListening) return;
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  rec = new SR();
+  rec.lang           = 'ko-KR';
+  rec.continuous     = true;
+  rec.interimResults = true;
+  wireRecHandlers(rec);
+  scheduleForceCommit();
+  try { rec.start(); } catch(e) {}
 }
 
 function commitTranslation() {
-  clearTimeout(silenceTimer); silenceTimer = null;
+  clearTimeout(silenceTimer); silenceTimer=null;
   var unsent = fullTranscript.slice(cursor).trim();
   if (!unsent) return;
   cursor = fullTranscript.length;
@@ -318,30 +401,36 @@ function enqueueTranslation(text) {
 }
 
 function processQueue() {
-  if (isTranslating || translationQueue.length === 0) return;
+  if (isTranslating || translationQueue.length===0) return;
   triggerTranslation(translationQueue.shift());
 }
 
 function stopListening() {
   isListening = false;
-  clearTimeout(silenceTimer);     silenceTimer = null;
-  clearTimeout(forceCommitTimer); forceCommitTimer = null;
-  clearInterval(watchdogTimer);   watchdogTimer = null;
-  if (rec) { try { rec.onend = null; rec.stop(); } catch (e) {} rec = null; }
+  clearTimeout(silenceTimer);    silenceTimer=null;
+  clearTimeout(forceCommitTimer); forceCommitTimer=null;
+  clearTimeout(proactiveTimer);   proactiveTimer=null;
+  clearInterval(watchdogTimer);   watchdogTimer=null;
+
+  if (rec)     { try { rec.onend=null; rec.stop(); }     catch(e) {} rec=null; }
+  if (recNext) { try { recNext.onend=null; recNext.stop(); } catch(e) {} recNext=null; }
+
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
   $('mic-indicator').classList.remove('active');
   $('interim-text').textContent = '';
-  fullTranscript = ''; cursor = 0;
+  fullTranscript=''; cursor=0;
   setStatus('Stopped');
 }
 
 // ── AUTO CONTEXT BUILDER ─────────────────────────────────────────────────────
 function updateSermonContext() {
   contextUpdateCounter++;
-  if (contextUpdateCounter % 4 !== 0) return;
+  if (contextUpdateCounter % 3 !== 0) return;   // every 3rd translation (was 4)
+
   var recentLines = historyLog.slice(-6).join(' ');
   if (!recentLines) return;
+
   fetch(WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -353,45 +442,31 @@ function updateSermonContext() {
         + 'Given the recent translated lines, write a single short sentence (max 20 words) '
         + 'describing the current topic, speaker situation, and any key context that would help '
         + 'interpret ambiguous colloquial Korean phrases. Be specific and factual. No preamble.',
-      messages: [{ role: 'user', content: 'Recent sermon lines:\n' + recentLines + '\n\nSummarize the current context in one short sentence.' }]
+      messages: [{ role:'user', content:'Recent sermon lines:\n'+recentLines+'\n\nSummarize the current context in one short sentence.' }]
     })
-  }).then(function (r) { return r.json(); }).then(function (d) {
+  }).then(function(r){ return r.json(); }).then(function(d){
     if (d && d.content && d.content[0]) {
       autoSermonContext = d.content[0].text.trim();
-      dbg('ctx: ' + autoSermonContext.slice(0, 50));
+      dbg('ctx: '+autoSermonContext.slice(0,50));
     }
-  }).catch(function () {});
+  }).catch(function(){});
 }
 
-// ── TRANSLATION ──────────────────────────────────────────────────────────────
-async function triggerTranslation(text) {
+// ── TRANSLATION WITH RETRY ────────────────────────────────────────────────────
+async function triggerTranslation(text, attempt) {
+  attempt = attempt || 1;
   isTranslating = true;
-  setStatus('Translating…', 'translating');
+  setStatus('Translating...', 'translating');
   clearError();
 
-  var safetyTimeout = setTimeout(function () {
-    if (!isTranslating) return;
-    isTranslating = false;
-    setStatus('🎤 Listening…', 'listening');
-    dbg('safety timeout fired');
-    processQueue();
-  }, 30000);
-
-  // Secondary unlock — if queue is stuck after 35s, force reset
-  var unlockTimeout = setTimeout(function () {
-    if (isTranslating) {
-      isTranslating = false;
-      dbg('force unlocked');
-      processQueue();
-    }
-  }, 35000);
-
-  var manualTopic = $('sermonContext').value.trim();
-  var topicLine   = manualTopic ? 'Sermon topic: ' + manualTopic + '\n\n' : '';
-  var contextLine = autoSermonContext ? 'Running sermon context (use to interpret ambiguous phrases): ' + autoSermonContext + '\n\n' : '';
-  var historyStr  = historyLog.length
-    ? 'Previous lines for context only (do not extend or continue them):\n'
-      + historyLog.slice(-3).map(function (h) { return 'EN: ' + h; }).join('\n') + '\n\n'
+  var manualTopic  = $('sermonContext').value.trim();
+  var topicLine    = manualTopic ? 'Sermon topic: ' + manualTopic + '\n\n' : '';
+  var contextLine  = autoSermonContext ? 'Running sermon context (use to interpret ambiguous phrases): ' + autoSermonContext + '\n\n' : '';
+  // Send last 8 history lines (up from 3) with connector instruction
+  var historyStr   = historyLog.length
+    ? 'Previous lines for context (do not extend or repeat them):\n'
+      + historyLog.slice(-8).map(function(h){ return 'EN: '+h; }).join('\n')
+      + '\n\nIf the new chunk continues the thought from the last line above, begin with a natural connector (e.g. "And", "So", "But", "Because") rather than restarting a new sentence cold.\n\n'
     : '';
 
   var systemPrompt =
@@ -413,7 +488,20 @@ async function triggerTranslation(text) {
     + 'but never add content beyond what was spoken. '
     + 'Speech recognition often mishears Korean Bible book names — correct them using context '
     + '(e.g. 사사기=Judges, 열왕기=Kings, 이사야=Isaiah).\n\n'
-    + 'IMPORTANT: Never output "..." or any placeholder. Always translate what was said, even filler '
+
+    // ── PROPER NOUN RULES (v90) ──
+    + 'PROPER NOUNS: '
+    + 'Always use a person\'s name exactly as spoken — never substitute a pronoun (he/she/they) '
+    + 'when the speaker used the person\'s name. '
+    + 'Preserve Korean cultural references such as TV show names, place names, and brand names '
+    + 'in their most widely recognized English form (e.g. 무한도전 → "Infinite Challenge", '
+    + '여의도 → "Yeouido"). '
+    + 'When a Korean proper noun has a well-known natural English equivalent, use it '
+    + '(e.g. 서울 → "Seoul", 예수님 → "Jesus", 하나님 → "God"). '
+    + 'Do not invent anglicizations for names with no standard English form — '
+    + 'keep the Korean romanization in that case.\n\n'
+
+    + 'IMPORTANT: Never output "…" or any placeholder. Always translate what was said, even filler '
     + 'words or transitional expressions (e.g. 아/음/그/네 → "Yes" / "And" / omit gracefully). '
     + 'If the input is genuinely unintelligible noise, respond with a single space " ". '
     + 'Never skip or omit a response.\n\n'
@@ -432,40 +520,31 @@ async function triggerTranslation(text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 500,
-        stream: false,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: topicLine + contextLine + historyStr + 'Translate:\n' + text }]
+        model:      MODEL,
+        max_tokens: 600,           // bumped from 500
+        stream:     false,
+        system:     systemPrompt,
+        messages: [{ role:'user', content: topicLine + contextLine + historyStr + 'Translate:\n' + text }]
       })
     });
 
-    clearTimeout(safetyTimeout);
-    clearTimeout(unlockTimeout);
-
     if (!res.ok) {
-      var errData = await res.json();
-      showError('API error: ' + (errData && errData.error ? errData.error.message : 'HTTP ' + res.status));
-      isTranslating = false; processQueue(); return;
+      var errData = await res.json().catch(function(){ return {}; });
+      throw new Error('API error: ' + (errData && errData.error ? errData.error.message : 'HTTP '+res.status));
     }
 
-    var data = await res.json();
+    var data   = await res.json();
     var result = data && data.content && data.content[0] ? data.content[0].text.trim() : null;
 
-    if (result && /^[\s.…]+$/.test(result)) result = null;
+    if (result && /^[\s\.…]+$/.test(result)) result = null;
     if (result && /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(result)) result = null;
 
-    // Trim to last complete sentence — never end on a comma, dash, or incomplete fragment
+    // Trim to last complete sentence
     if (result) {
-      var lastStop = Math.max(
-        result.lastIndexOf('.'),
-        result.lastIndexOf('!'),
-        result.lastIndexOf('?')
-      );
+      var lastStop = Math.max(result.lastIndexOf('.'), result.lastIndexOf('!'), result.lastIndexOf('?'));
       if (lastStop > 0 && lastStop > result.length * 0.3) {
-        result = result.slice(0, lastStop + 1).trim();
+        result = result.slice(0, lastStop+1).trim();
       } else {
-        // No sentence boundary found — strip trailing punctuation like commas and dashes
         result = result.replace(/[\s,\-–—]+$/, '').trim();
       }
     }
@@ -479,15 +558,20 @@ async function triggerTranslation(text) {
     }
 
     isTranslating = false;
-    setStatus('🎤 Listening…', 'listening');
-    dbg('done | q:' + translationQueue.length + (autoSermonContext ? ' | ctx ok' : ''));
+    setStatus('🎤 Listening...', 'listening');
+    dbg('done | q:'+translationQueue.length+(autoSermonContext?' | ctx ok':''));
     processQueue();
 
-  } catch (err) {
-    clearTimeout(safetyTimeout);
-    clearTimeout(unlockTimeout);
-    if (err.name !== 'AbortError') showError('Network error: ' + err.message);
+  } catch(err) {
+    if (attempt < MAX_RETRIES + 1) {
+      dbg('retry '+attempt+'/'+MAX_RETRIES);
+      await new Promise(function(r){ setTimeout(r, 1000); });
+      return triggerTranslation(text, attempt + 1);
+    }
+    // All retries exhausted
+    if (err.name !== 'AbortError') showError(err.message || ('Network error: '+err));
     isTranslating = false;
+    setStatus('🎤 Listening...', 'listening');
     processQueue();
   }
 }
