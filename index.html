@@ -42,7 +42,7 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 #new-indicator { display: none; position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: #000; font-size: 13px; font-weight: 700; padding: 8px 20px; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 100; font-family: sans-serif; animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 #debug-badge { position: fixed; bottom: 24px; left: 20px; font-size: 11px; font-family: monospace; color: #555; background: #111; padding: 4px 8px; border-radius: 4px; border: 1px solid #222; pointer-events: none; z-index: 99; }
-#mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; z-index: 99; }
+#mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; z-index: 99; display: none; }
 #mic-indicator.active { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 </style>
@@ -357,6 +357,7 @@ function startListening() {
 
   $('startBtn').textContent = '■ Stop';
   $('startBtn').classList.add('active');
+  $('mic-indicator').style.display = 'block';
   $('mic-indicator').classList.add('active');
   setStatus('🎤 Listening...', 'listening');
 
@@ -502,6 +503,7 @@ function stopListening() {
   $('startBtn').textContent = '▶ Start';
   $('startBtn').classList.remove('active');
   $('mic-indicator').classList.remove('active');
+  $('mic-indicator').style.display = 'none';
   $('interim-text').textContent = '';
   fullTranscript = ''; cursor = 0; lastCommittedText = '';
   setStatus('Stopped');
