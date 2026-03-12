@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
-
+<style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0a0a0a; color: #f0f0f0; font-family: 'Inter', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 #controls { background: #111; border-bottom: 1px solid #222; padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
@@ -22,56 +22,25 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 #status.translating { color: #aaaaaa; }
 #status.error { color: #e74c3c; }
 #error-box { display: none; background: #1a0000; border: 1px solid #500; border-radius: 8px; padding: 10px 16px; font-size: 12px; color: #ff6b6b; margin: 6px 20px; font-family: monospace; word-break: break-all; flex-shrink: 0; }
-
-/* Scroll container */
 #display { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 40px 40px 24px; position: relative; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 #display::-webkit-scrollbar { width: 4px; }
 #display::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-
 #placeholder { text-align: center; color: #2a2a2a; padding: 40vh 0; pointer-events: none; }
 #placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
-
 #translation-box { width: 100%; max-width: 1200px; margin: 0 auto; text-align: center; padding-bottom: 40px; display: flex; flex-direction: column; justify-content: flex-end; min-height: 100%; }
 #translation-lines { display: flex; flex-direction: column; gap: 36px; }
-
-.tline {
-  font-size: clamp(18px, 2.5vw, 36px);
-  line-height: 1.4;
-  text-shadow: 0 2px 20px rgba(0,0,0,0.8);
-  transition: color 0.8s, opacity 0.8s, transform 0.5s cubic-bezier(0.22,1,0.36,1);
-}
+.tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.8s, opacity 0.8s, transform 0.5s cubic-bezier(0.22,1,0.36,1); }
 .tline.newest { color: #ffffff; }
 .tline.oldest { color: #ffffff; }
 .tline.entering { opacity: 0; transform: translateY(30px); }
-
 #interim-box { margin-top: 36px; min-height: 1.2em; }
 #streaming-line { font-size: clamp(18px,2.5vw,36px); line-height: 1.4; color: #aaaaaa; text-shadow: 0 2px 20px rgba(0,0,0,0.8); min-height: 1.4em; transition: opacity 0.3s; }
 #streaming-line.empty { opacity: 0; }
 #streaming-cursor { display: inline-block; width: 3px; height: 0.85em; background: #aaaaaa; vertical-align: text-bottom; margin-left: 3px; animation: blink 0.7s infinite; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 #interim-text { font-size: clamp(11px,1.2vw,16px); color: #333; margin-top: 12px; font-style: italic; min-height: 1.2em; font-family: sans-serif; }
-
-/* New translation indicator */
-#new-indicator {
-  display: none;
-  position: fixed;
-  bottom: 48px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #2ecc71;
-  color: #000;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 20px;
-  border-radius: 20px;
-  cursor: pointer;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-  z-index: 100;
-  font-family: sans-serif;
-  animation: fadeIn 0.3s ease;
-}
+#new-indicator { display: none; position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: #000; font-size: 13px; font-weight: 700; padding: 8px 20px; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 100; font-family: sans-serif; animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-
 #debug-badge { position: fixed; bottom: 24px; left: 20px; font-size: 11px; font-family: monospace; color: #555; background: #111; padding: 4px 8px; border-radius: 4px; border: 1px solid #222; pointer-events: none; z-index: 99; }
 #mic-indicator { position: fixed; bottom: 24px; right: 28px; width: 14px; height: 14px; border-radius: 50%; background: #333; z-index: 99; }
 #mic-indicator.active { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; animation: pulse 1.5s infinite; }
@@ -115,7 +84,7 @@ var SILENCE_MS       = 12000;
 var MAX_CHARS        = 500;
 var FORCE_COMMIT_MS  = 20000;
 var PROACTIVE_MS     = 25000;
-var MAX_LINES        = 50; // keep full history
+var MAX_LINES        = 50;
 var isNearBottom     = true;
 
 // ── FIREBASE ─────────────────────────────────────────────────────────────────
@@ -146,6 +115,7 @@ function setTopSpacer() {
 }
 setTopSpacer();
 window.addEventListener('resize', setTopSpacer);
+
 displayEl.addEventListener('scroll', function() {
   var threshold = 80;
   isNearBottom = displayEl.scrollHeight - displayEl.scrollTop - displayEl.clientHeight < threshold;
@@ -263,13 +233,13 @@ function reclassLines() {
 function ensurePunctuation(text) {
   if (!text) return text;
   text = text.trim();
-  var straightCount  = (text.match(/"/g) || []).length;
+  var straightCount   = (text.match(/"/g) || []).length;
   var hasOpenStraight = straightCount % 2 !== 0;
-  var curlyOpen  = (text.match(/\u201c/g) || []).length;
-  var curlyClose = (text.match(/\u201d/g) || []).length;
-  var hasOpenCurly = curlyOpen > curlyClose;
+  var curlyOpen       = (text.match(/\u201c/g) || []).length;
+  var curlyClose      = (text.match(/\u201d/g) || []).length;
+  var hasOpenCurly    = curlyOpen > curlyClose;
   var needsCloseQuote = hasOpenStraight || hasOpenCurly;
-  var closeQ = hasOpenCurly ? '\u201d' : '"';
+  var closeQ          = hasOpenCurly ? '\u201d' : '"';
   if (/[.!?]["'\u201d]?$/.test(text)) {
     if (needsCloseQuote && !/["'\u201d]$/.test(text)) return text + closeQ;
     return text;
@@ -288,7 +258,6 @@ function displayFinalLine(text) {
   div.textContent = text;
   linesEl.appendChild(div);
 
-  // Trigger slide-up animation
   requestAnimationFrame(function() {
     requestAnimationFrame(function() {
       div.classList.remove('entering');
@@ -322,14 +291,14 @@ function clearTranslations() {
   translationsRef.remove();
   $('translation-lines').innerHTML = '';
   setStreamingText('');
-  fullTranscript = ''; cursor = 0;
-  lastFirebaseKey  = null;
+  fullTranscript    = ''; cursor = 0;
+  lastFirebaseKey   = null;
   lastCommittedText = '';
-  translationQueue = [];
-  autoSermonContext = '';
+  translationQueue  = [];
+  autoSermonContext  = '';
   contextUpdateCounter = 0;
-  $('placeholder').style.display = 'block';
-  $('new-indicator').style.display = 'none';
+  $('placeholder').style.display    = 'block';
+  $('new-indicator').style.display  = 'none';
 }
 
 // ── SPEECH RECOGNITION ────────────────────────────────────────────────────────
@@ -613,13 +582,10 @@ async function triggerTranslation(text, retryCount) {
     if (!res.ok) {
       var errData = await res.json().catch(function() { return {}; });
       var status = res.status;
-      // Retry on 529 (overloaded) up to 4 times with exponential backoff
       if (status === 529 && retryCount < 4) {
-        var delay = Math.pow(2, retryCount) * 2000; // 2s, 4s, 8s, 16s
+        var delay = Math.pow(2, retryCount) * 2000;
         dbg('overloaded, retry ' + (retryCount + 1) + ' in ' + (delay/1000) + 's');
         setStatus('Retrying...', 'translating');
-        clearTimeout(safetyTimeout);
-        clearTimeout(unlockTimeout);
         isTranslating = false;
         setTimeout(function() { triggerTranslation(text, retryCount + 1); }, delay);
         return;
