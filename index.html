@@ -413,12 +413,6 @@ function commitTranslation() {
 function enqueueTranslation(text) {
   if (!text || text.trim().length < 10) return;
   translationQueue.push(text);
-  // If backed up, merge and keep only the most recent MAX_QUEUE chunks
-  while (translationQueue.length > MAX_QUEUE) {
-    var oldest = translationQueue.shift();
-    // Prepend to next item so no content is silently dropped
-    translationQueue[0] = oldest + ' ' + translationQueue[0];
-  }
   processQueue();
 }
 
@@ -475,13 +469,14 @@ function updateSermonContext() {
 }
 
 // ── TRANSLATION WITH RETRY ────────────────────────────────────────────────────
-async function triggerTranslation(text, attempt) {
-  attempt = attempt || 1;
+async function triggerTranslation(text, attempt, queueDepth) {
+  attempt    = attempt    || 1;
+  queueDepth = queueDepth || 0;
   isTranslating = true;
   setStatus('Translating...', 'translating');
   clearError();
 
-  var activeModel = translationQueue.length >= MAX_QUEUE ? MODEL_FAST : MODEL;
+  var activeModel = queueDepth >= 1 ? MODEL_FAST : MODEL;
   var topicLine    = manualTopic ? 'Sermon topic: ' + manualTopic + '\n\n' : '';
   var contextLine  = autoSermonContext ? 'Running sermon context (use to interpret ambiguous phrases): ' + autoSermonContext + '\n\n' : '';
   // Send last 8 history lines (up from 3) with connector instruction
@@ -590,7 +585,7 @@ async function triggerTranslation(text, attempt) {
     if (attempt < MAX_RETRIES + 1) {
       dbg('retry '+attempt+'/'+MAX_RETRIES);
       await new Promise(function(r){ setTimeout(r, 1000); });
-      return triggerTranslation(text, attempt + 1);
+      return triggerTranslation(text, attempt + 1, queueDepth);
     }
     // All retries exhausted
     if (err.name !== 'AbortError') showError(err.message || ('Network error: '+err));
