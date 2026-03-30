@@ -50,7 +50,7 @@ body { background: #0a0a0a; color: #f0f0f0; font-family: 'Inter', sans-serif; he
 
 .ctrl-topic-label {
   font-size: 11px;
-  color: #444;
+  color: #888;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   white-space: nowrap;
@@ -58,24 +58,24 @@ body { background: #0a0a0a; color: #f0f0f0; font-family: 'Inter', sans-serif; he
 }
 
 input[type="text"] {
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid #252525;
-  color: #888;
-  padding: 4px 0;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 5px;
+  color: #e0e0e0;
+  padding: 6px 10px;
   font-size: 13px;
   font-family: 'Inter', sans-serif;
-  width: 220px;
+  width: 260px;
   outline: none;
-  transition: border-color 0.2s, color 0.2s;
+  transition: border-color 0.2s, background 0.2s;
 }
 
 input[type="text"]:focus {
-  border-bottom-color: #c9a84c;
-  color: #f0f0f0;
+  border-color: #555;
+  background: #222;
 }
 
-input[type="text"]::placeholder { color: #333; }
+input[type="text"]::placeholder { color: #444; }
 
 /* Center section: status pill */
 .status-pill {
@@ -181,7 +181,7 @@ button { border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-w
 #display::-webkit-scrollbar { width: 4px; }
 #display::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 2px; }
 #placeholder { text-align: center; color: #1e1e1e; padding: 40vh 0; pointer-events: none; }
-#placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; font-family: 'Lora', serif; }
+#placeholder h1 { font-size: 48px; font-weight: 300; letter-spacing: 4px; }
 #translation-box { width: 100%; max-width: 1200px; margin: 0 auto; text-align: center; padding-bottom: 40px; display: flex; flex-direction: column; justify-content: flex-end; min-height: 100%; }
 #translation-lines { display: flex; flex-direction: column; gap: 36px; }
 .tline { font-size: clamp(18px, 2.5vw, 36px); line-height: 1.4; text-shadow: 0 2px 20px rgba(0,0,0,0.8); transition: color 0.8s, opacity 0.8s, transform 0.5s cubic-bezier(0.22,1,0.36,1); cursor: text; position: relative; }
