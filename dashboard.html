@@ -559,7 +559,7 @@
   <script>
     const SUPABASE_URL = 'https://zhrkwgpjvgessiqmmefn.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpocmt3Z3Bqdmdlc3NpcW1tZWZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4OTUzMjksImV4cCI6MjA5MDQ3MTMyOX0.JoDcJXtL5il1sprbdf2M3XyyyN7BtdwmwY3hP3BrQ8Q';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentUser = null;
     let currentProfile = null;
@@ -574,7 +574,7 @@
     }
 
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supa.auth.getUser();
       if (!user) return window.location.href = 'login.html';
 
       currentUser = user;
@@ -709,12 +709,12 @@
 
       try {
         // Create a pending profile entry — they'll sign up via invite email
-        const { error } = await supabase.auth.admin; // placeholder — invite via magic link
+        const { error } = await supa.auth.admin; // placeholder — invite via magic link
 
         // For now: use Supabase's signUp to create account with temp password
         // In production this would use an invite email flow
         const tempPassword = Math.random().toString(36).slice(2) + 'Aa1!';
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        const { data: authData, error: authError } = await supa.auth.signUp({
           email,
           password: tempPassword,
           options: { data: { full_name: name } }
@@ -809,7 +809,7 @@
     }
 
     async function handleSignOut() {
-      await supabase.auth.signOut();
+      await supa.auth.signOut();
       window.location.href = 'login.html';
     }
 
