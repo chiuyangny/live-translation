@@ -36,7 +36,7 @@ button { border: none; border-radius: 6px; padding: 7px 18px; font-size: 13px; c
 .tline.entering { opacity: 0; transform: translateY(30px); }
 /* Inline edit styles */
 .tline:hover::after { content: '✎'; position: absolute; right: -28px; top: 50%; transform: translateY(-50%); font-size: 14px; color: #555; pointer-events: none; }
-.tline-input { background: transparent; border: none; border-bottom: 1px solid #555; color: #fff; font-size: inherit; font-family: inherit; line-height: inherit; width: 100%; text-align: center; outline: none; padding: 2px 0; }
+.tline-input { background: transparent; border: none; border-bottom: 2px solid #555; color: #fff; font-size: inherit; font-family: inherit; line-height: inherit; width: 100%; text-align: center; outline: none; padding: 4px 0; resize: none; overflow: hidden; display: block; }
 .tline-input:focus { border-bottom-color: #2ecc71; }
 .edit-hint { position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%); background: #1a1a1a; border: 1px solid #333; color: #888; font-size: 11px; padding: 4px 10px; border-radius: 4px; pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 101; font-family: sans-serif; }
 .edit-hint.show { opacity: 1; }
@@ -409,19 +409,30 @@ function showEditHint() {
 }
 
 function makeLineEditable(div, fbKey) {
-  if (div.querySelector('input')) return; // already editing
+  if (div.querySelector('textarea')) return; // already editing
   showEditHint();
 
   var original = div.textContent.trim();
   div.textContent = '';
 
-  var input = document.createElement('input');
-  input.type = 'text';
+  var input = document.createElement('textarea');
   input.className = 'tline-input';
   input.value = original;
+  input.rows = 1;
   div.appendChild(input);
-  input.focus();
-  input.select();
+
+  // Auto-size height to content so full paragraph is always visible
+  function autoSize() {
+    input.style.height = 'auto';
+    input.style.height = input.scrollHeight + 'px';
+  }
+  requestAnimationFrame(function() {
+    autoSize();
+    input.focus();
+    // Place cursor at end
+    input.setSelectionRange(input.value.length, input.value.length);
+  });
+  input.addEventListener('input', autoSize);
 
   function saveEdit() {
     var newText = input.value.trim();
@@ -457,7 +468,7 @@ function makeLineEditable(div, fbKey) {
   }
 
   input.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); saveEdit(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); }
     else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
   });
   input.addEventListener('blur', function() {
