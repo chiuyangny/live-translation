@@ -955,7 +955,7 @@ async function triggerTranslation(text, retryCount) {
 
       var doWrite = function() {
         if (!translationsRef) return;
-        var newRef = translationsRef.push({ text: result, timestamp: firebase.database.ServerValue.TIMESTAMP });
+        var newRef = translationsRef.push({ text: result, ko: text, timestamp: firebase.database.ServerValue.TIMESTAMP });
         lastFirebaseKey = newRef.key;
         displayFinalLine(result, newRef.key);
         pushHistory(result);
