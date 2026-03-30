@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In — Live Sermon Translation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream: #faf7f2;
+      --ink: #1a1714;
+      --muted: #7a7168;
+      --gold: #c9a84c;
+      --gold-light: #e8d9a8;
+      --error: #b84c4c;
+      --border: #e2ddd5;
+    }
+
+    body {
+      background: var(--cream);
+      color: var(--ink);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      width: 100%;
+      max-width: 440px;
+      padding: 48px 40px;
+      position: relative;
+      box-shadow: 0 2px 24px rgba(26,23,20,0.06);
+      animation: fadeUp 0.5s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card::before {
+      content: '✦';
+      position: absolute;
+      top: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      color: var(--gold);
+      font-size: 18px;
+      padding: 0 8px;
+      line-height: 1;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .header h1 {
+      font-family: 'Lora', serif;
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 300;
+      line-height: 1.5;
+    }
+
+    .field {
+      margin-bottom: 18px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      color: var(--ink);
+      background: var(--cream);
+      transition: border-color 0.15s, background 0.15s;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: var(--gold);
+      background: white;
+    }
+
+    input::placeholder { color: #c4bdb4; }
+
+    .forgot-link {
+      text-align: right;
+      margin-top: 6px;
+    }
+
+    .forgot-link a {
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 13px;
+      background: var(--ink);
+      color: white;
+      border: none;
+      border-radius: 3px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.15s, transform 0.1s;
+      letter-spacing: 0.02em;
+    }
+
+    .btn:hover { background: #2e2a26; }
+    .btn:active { transform: scale(0.99); }
+    .btn:disabled { background: #c4bdb4; cursor: not-allowed; transform: none; }
+
+    .error-msg {
+      background: #fdf0f0;
+      border: 1px solid #e8c4c4;
+      border-radius: 3px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--error);
+      margin-bottom: 18px;
+      display: none;
+    }
+
+    .success-msg {
+      background: #f0fdf4;
+      border: 1px solid #a7d8b0;
+      border-radius: 3px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #2d6a3f;
+      margin-bottom: 18px;
+      display: none;
+    }
+
+    .footer-link {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .footer-link a {
+      color: var(--ink);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Reset password modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(26,23,20,0.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 100;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 8px 40px rgba(26,23,20,0.12);
+    }
+
+    .modal h2 {
+      font-family: 'Lora', serif;
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+
+    .modal p {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .btn-outline {
+      flex: 1;
+      padding: 11px;
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+
+    .btn-outline:hover { border-color: var(--ink); }
+
+    .btn-sm {
+      flex: 1;
+      padding: 11px;
+      background: var(--ink);
+      color: white;
+      border: none;
+      border-radius: 3px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-sm:hover { background: #2e2a26; }
+    .btn-sm:disabled { background: #c4bdb4; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>Welcome back</h1>
+      <p>Sign in to manage your church's live translation.</p>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="success-msg" id="successMsg"></div>
+
+    <div class="field">
+      <label for="email">Email address</label>
+      <input type="email" id="email" placeholder="you@church.org" autocomplete="email" />
+    </div>
+
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Your password" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter') handleLogin()" />
+      <div class="forgot-link">
+        <a href="#" onclick="openReset(event)">Forgot password?</a>
+      </div>
+    </div>
+
+    <button class="btn" id="submitBtn" onclick="handleLogin()">Sign in</button>
+
+    <div class="footer-link">
+      New here? <a href="signup.html">Register your church</a>
+    </div>
+  </div>
+
+  <!-- Reset password modal -->
+  <div class="modal-overlay" id="resetModal">
+    <div class="modal">
+      <h2>Reset password</h2>
+      <p>Enter your email and we'll send you a link to reset your password.</p>
+      <div class="field">
+        <label for="resetEmail">Email address</label>
+        <input type="email" id="resetEmail" placeholder="you@church.org" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn-outline" onclick="closeReset()">Cancel</button>
+        <button class="btn-sm" id="resetBtn" onclick="handleReset()">Send link</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://zhrkwgpjvgessiqmmefn.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpocmt3Z3Bqdmdlc3NpcW1tZWZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4OTUzMjksImV4cCI6MjA5MDQ3MTMyOX0.JoDcJXtL5il1sprbdf2M3XyyyN7BtdwmwY3hP3BrQ8Q';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('successMsg').style.display = 'none';
+    }
+
+    function showSuccess(msg) {
+      const el = document.getElementById('successMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('errorMsg').style.display = 'none';
+    }
+
+    async function handleLogin() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) return showError('Please enter your email and password.');
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Signing in…';
+      document.getElementById('errorMsg').style.display = 'none';
+
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        showError(err.message || 'Invalid email or password.');
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    }
+
+    function openReset(e) {
+      e.preventDefault();
+      document.getElementById('resetEmail').value = document.getElementById('email').value;
+      document.getElementById('resetModal').classList.add('open');
+    }
+
+    function closeReset() {
+      document.getElementById('resetModal').classList.remove('open');
+    }
+
+    async function handleReset() {
+      const email = document.getElementById('resetEmail').value.trim();
+      if (!email) return;
+
+      const btn = document.getElementById('resetBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/dashboard.html'
+        });
+        if (error) throw error;
+        closeReset();
+        showSuccess('Password reset link sent — check your email.');
+      } catch (err) {
+        showError(err.message || 'Could not send reset email.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send link';
+      }
+    }
+  </script>
+</body>
+</html>
