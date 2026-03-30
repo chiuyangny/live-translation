@@ -776,8 +776,7 @@
     }
 
     function viewSession(id) {
-      // Future: open a session review page
-      showToast('Session review coming soon.');
+      window.location.href = 'review.html?church=' + currentChurch.slug + '&session=' + id;
     }
 
     function copyUrl() {
