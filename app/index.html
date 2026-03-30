@@ -225,6 +225,53 @@ button { border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-w
 #debug-badge { position: fixed; bottom: 20px; left: 20px; font-size: 10px; font-family: monospace; color: #2a2a2a; background: #0f0f0f; padding: 3px 7px; border-radius: 3px; border: 1px solid #1a1a1a; pointer-events: none; z-index: 99; }
 #mic-indicator { display: none; }
 
+/* ── LIGHT MODE ── */
+body.light { background: #faf7f2; color: #1a1714; }
+body.light #controls { background: #f0ece4; border-bottom-color: #e2ddd5; }
+body.light .ctrl-btn { color: #7a7168; border-color: #d0c8be; }
+body.light .ctrl-btn:hover { border-color: #1a1714; color: #1a1714; }
+body.light #startBtn { background: #d4eddf; color: #1a5c30; border-color: #a8d8b8; }
+body.light #startBtn.active { background: #f0d4d4; color: #7a1a1a; border-color: #d8a8a8; }
+body.light .status-pill { background: #e8e2da; border-color: #d0c8be; }
+body.light #status { color: #7a7168; }
+body.light #status.listening { color: #1a6b35; }
+body.light #status.translating { color: #7a5c1a; }
+body.light #status.error { color: #b84c4c; }
+body.light .status-dot.listening { background: #2ecc71; }
+body.light .status-dot.translating { background: #c9a84c; }
+body.light .ctrl-topic-label { color: #7a7168; }
+body.light input[type="text"] { background: #ffffff; border-color: #d0c8be; color: #1a1714; }
+body.light input[type="text"]:focus { border-color: #7a7168; background: #ffffff; }
+body.light input[type="text"]::placeholder { color: #b0a898; }
+body.light .ctrl-divider { background: #d0c8be; }
+body.light #display { background: #faf7f2; }
+body.light #placeholder { color: #e2ddd5; }
+body.light #display::-webkit-scrollbar-thumb { background: #d0c8be; }
+body.light .tline.newest { color: #1a1714; text-shadow: none; }
+body.light .tline.oldest { color: #1a1714; text-shadow: none; }
+body.light .tline.entering { opacity: 0; transform: translateY(30px); }
+body.light #streaming-line { color: #7a7168; text-shadow: none; }
+body.light #streaming-cursor { background: #7a7168; }
+body.light #interim-text { color: #b0a898; }
+body.light #new-indicator { background: #d4eddf; color: #1a5c30; border-color: #a8d8b8; }
+body.light #debug-badge { color: #d0c8be; background: #f0ece4; border-color: #e2ddd5; }
+body.light #error-box { background: #fdf0f0; border-top-color: #e8c4c4; color: #b84c4c; }
+body.light .tline-input { border-bottom-color: #d0c8be; color: #1a1714; }
+body.light .tline-input:focus { border-bottom-color: #1a1714; }
+body.light .edit-hint { background: #f0ece4; border-color: #d0c8be; color: #7a7168; }
+body.light #transcript-panel { background: #f0ece4; border-left-color: #e2ddd5; }
+body.light #transcript-panel-header { background: #e8e2da; border-bottom-color: #d0c8be; }
+body.light #transcript-panel-header span { color: #1a1714; }
+body.light #transcriptCloseBtn { background: #d8d0c4; color: #1a1714; border-color: #c8c0b4; }
+body.light .transcript-ko { color: #5a5248; }
+body.light .transcript-en { color: #9a9088; }
+body.light .transcript-ts { color: #c0b8b0; }
+body.light .transcript-entry { border-bottom-color: #e2ddd5; }
+body.light #transcript-export-btn { background: #e8e2da; border-color: #d0c8be; color: #7a7168; }
+body.light #transcript-export-btn:hover { background: #e0d8d0; color: #1a1714; }
+body.light #auth-gate { background: #faf7f2; }
+body.light #auth-gate p { color: #7a7168; }
+
 /* ── AUTH GATE ── */
 #auth-gate { position: fixed; inset: 0; background: #0a0a0a; display: flex; align-items: center; justify-content: center; z-index: 999; flex-direction: column; gap: 16px; }
 #auth-gate p { color: #555; font-size: 14px; }
@@ -257,6 +304,7 @@ button { border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-w
     </div>
   </div>
   <div class="ctrl-right">
+    <button id="themeBtn" class="ctrl-btn" onclick="toggleTheme()" title="Toggle light/dark mode">☀</button>
     <button id="fullscreenBtn" class="ctrl-btn" onclick="toggleFullscreen()">⛶</button>
   </div>
 </div>
@@ -639,6 +687,25 @@ function exportTranscript() {
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+function toggleTheme() {
+  var isLight = document.body.classList.toggle('light');
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  var btn = $('themeBtn');
+  if (btn) btn.textContent = isLight ? '☾' : '☀';
+}
+
+// Apply saved theme on load
+(function() {
+  var saved = localStorage.getItem('theme');
+  if (saved === 'light') {
+    document.body.classList.add('light');
+    document.addEventListener('DOMContentLoaded', function() {
+      var btn = $('themeBtn');
+      if (btn) btn.textContent = '☾';
+    });
+  }
+})();
 
 function toggleFullscreen() {
   if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); $('controls').style.display = 'none'; }
