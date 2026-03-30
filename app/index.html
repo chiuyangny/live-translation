@@ -29,18 +29,9 @@ body { background: #0a0a0a; color: #f0f0f0; font-family: 'Inter', sans-serif; he
 .ctrl-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
-}
-
-.ctrl-church {
-  font-family: 'Lora', serif;
-  font-size: 14px;
-  color: #c9a84c;
-  font-weight: 600;
-  white-space: nowrap;
-  letter-spacing: 0.02em;
 }
 
 .ctrl-divider {
@@ -87,15 +78,6 @@ input[type="text"]:focus {
 input[type="text"]::placeholder { color: #333; }
 
 /* Center section: status pill */
-.ctrl-center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  flex-shrink: 0;
-  padding: 0 24px;
-}
-
 .status-pill {
   display: flex;
   align-items: center;
@@ -258,30 +240,23 @@ button { border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-w
 </div>
 
 <div id="controls">
-  <!-- Left: church name + topic -->
+  <!-- Buttons in order: Start, Clear, Export, Korean, Status pill, Context -->
   <div class="ctrl-left">
-    <span class="ctrl-church" id="ctrl-church-name">SERMONLIVE</span>
-    <div class="ctrl-divider"></div>
-    <div class="ctrl-topic-wrap">
-      <span class="ctrl-topic-label">Topic</span>
-      <input type="text" id="sermonContext" placeholder="e.g. John 3:16, faith, grace" />
-    </div>
-  </div>
-
-  <!-- Center: status pill -->
-  <div class="ctrl-center">
+    <button id="startBtn" onclick="toggleListening()">▶ Start</button>
+    <button id="clearBtn" class="ctrl-btn" onclick="clearTranslations()">Clear</button>
+    <button id="exportBtn" class="ctrl-btn" onclick="exportTranslations()">Export</button>
+    <button id="transcriptBtn" class="ctrl-btn" onclick="toggleTranscriptPanel()">Korean</button>
     <div class="status-pill" id="statusPill">
       <div class="status-dot" id="statusDot"></div>
-      <span id="status">Ready</span>
+      <span id="status">Stopped</span>
+    </div>
+    <div class="ctrl-divider"></div>
+    <div class="ctrl-topic-wrap">
+      <span class="ctrl-topic-label">Context</span>
+      <input type="text" id="sermonContext" placeholder="Sermon topic, scripture, key names (helps accuracy)" />
     </div>
   </div>
-
-  <!-- Right: action buttons -->
   <div class="ctrl-right">
-    <button id="startBtn" onclick="toggleListening()">▶ Start</button>
-    <button id="transcriptBtn" class="ctrl-btn" onclick="toggleTranscriptPanel()">🇰🇷 Korean</button>
-    <button id="clearBtn" class="ctrl-btn" onclick="clearTranslations()">⌫ Clear</button>
-    <button id="exportBtn" class="ctrl-btn" onclick="exportTranslations()">⬇ Export</button>
     <button id="fullscreenBtn" class="ctrl-btn" onclick="toggleFullscreen()">⛶</button>
   </div>
 </div>
