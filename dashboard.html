@@ -467,38 +467,21 @@
       </div>
     </div>
 
-    <!-- Active session -->
+    <!-- Operator link -->
     <div class="card">
       <div class="card-header">
         <div>
-          <div class="card-title">Live session</div>
-          <div class="card-subtitle">Start a session before the operator begins translating</div>
+          <div class="card-title">Operator view</div>
+          <div class="card-subtitle">Open this on the operator's computer — they control the session</div>
         </div>
       </div>
-
-      <div class="session-status">
-        <div class="status-dot" id="statusDot"></div>
-        <span class="status-label" id="statusLabel">No active session</span>
+      <div class="url-box">
+        <span id="operatorUrl"></span>
+        <button class="btn-copy" id="copyOperatorBtn" onclick="copyOperatorUrl()">Copy</button>
       </div>
-
-      <div id="startSessionArea">
-        <div class="session-form">
-          <div class="field">
-            <label for="sessionTitle">Session title</label>
-            <input type="text" id="sessionTitle" placeholder="Sunday Service — March 30, 2026" />
-          </div>
-          <button class="btn-primary" onclick="startSession()">Start session</button>
-        </div>
-      </div>
-
-      <div id="stopSessionArea" style="display:none">
-        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <a id="operatorLink" href="#" target="_blank" class="btn-primary" style="text-decoration:none; display:inline-block;">
-            Open operator view ↗
-          </a>
-          <button class="btn-danger" onclick="stopSession()">End session</button>
-        </div>
-      </div>
+      <p style="font-size:12px; color:var(--muted); margin-top:12px;">
+        The operator must be signed in to use this link. Sessions start and end from the operator view.
+      </p>
     </div>
 
     <!-- Operators -->
@@ -548,7 +531,7 @@
       </div>
 
       <div class="session-list" id="sessionList">
-        <div class="empty-state">No sessions yet — start your first one above</div>
+        <div class="empty-state">No sessions yet</div>
       </div>
     </div>
 
@@ -597,11 +580,13 @@
 
       const base = window.location.origin;
       const viewerUrl = `${base}/app/?church=${currentChurch.slug}`;
+      const operatorUrl = `${base}/app/?church=${currentChurch.slug}&operator`;
       document.getElementById('viewerUrl').textContent = viewerUrl;
+      document.getElementById('operatorUrl').textContent = operatorUrl;
       document.getElementById('loadingState').style.display = 'none';
       document.getElementById('mainContent').style.display = 'block';
 
-      await Promise.all([loadOperators(), loadSessions(), checkActiveSession()]);
+      await Promise.all([loadOperators(), loadSessions()]);
     }
 
     async function checkActiveSession() {
@@ -760,7 +745,7 @@
 
       const list = document.getElementById('sessionList');
       if (!data || data.length === 0) {
-        list.innerHTML = '<div class="empty-state">No sessions yet — start your first one above</div>';
+        list.innerHTML = '<div class="empty-state">No sessions yet</div>';
         return;
       }
 
@@ -801,10 +786,17 @@
         const btn = document.getElementById('copyBtn');
         btn.textContent = 'Copied!';
         btn.classList.add('copied');
-        setTimeout(() => {
-          btn.textContent = 'Copy';
-          btn.classList.remove('copied');
-        }, 2000);
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+      });
+    }
+
+    function copyOperatorUrl() {
+      const url = document.getElementById('operatorUrl').textContent;
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = document.getElementById('copyOperatorBtn');
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
       });
     }
 
