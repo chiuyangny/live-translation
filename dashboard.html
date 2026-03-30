@@ -581,7 +581,7 @@
       document.getElementById('navUser').textContent = user.email;
 
       // Load profile
-      const { data: profile } = await supabase
+      const { data: profile } = await supa
         .from('profiles')
         .select('*, churches(*)')
         .eq('id', user.id)
@@ -605,7 +605,7 @@
     }
 
     async function checkActiveSession() {
-      const { data } = await supabase
+      const { data } = await supa
         .from('sessions')
         .select('*')
         .eq('church_id', currentChurch.id)
@@ -639,7 +639,7 @@
       const title = document.getElementById('sessionTitle').value.trim()
         || `Service — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
 
-      const { data, error } = await supabase
+      const { data, error } = await supa
         .from('sessions')
         .insert({ church_id: currentChurch.id, title })
         .select()
@@ -655,7 +655,7 @@
       if (!activeSession) return;
       if (!confirm('End the current session? The translation will stop for viewers.')) return;
 
-      const { error } = await supabase
+      const { error } = await supa
         .from('sessions')
         .update({ ended_at: new Date().toISOString() })
         .eq('id', activeSession.id);
@@ -668,7 +668,7 @@
     }
 
     async function loadOperators() {
-      const { data } = await supabase
+      const { data } = await supa
         .from('profiles')
         .select('*')
         .eq('church_id', currentChurch.id)
@@ -723,7 +723,7 @@
         if (authError) throw authError;
 
         // Create their profile
-        const { error: profileError } = await supabase
+        const { error: profileError } = await supa
           .from('profiles')
           .insert({
             id: authData.user.id,
@@ -750,7 +750,7 @@
     }
 
     async function loadSessions() {
-      const { data } = await supabase
+      const { data } = await supa
         .from('sessions')
         .select('*, translations(count)')
         .eq('church_id', currentChurch.id)
