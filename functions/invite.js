@@ -1,12 +1,19 @@
 export async function onRequestPost(context) {
   const { request, env } = context;
-
+  
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json',
   };
+
+  try {
+
+  // Check env var first
+  if (!env.SUPABASE_SERVICE_KEY) {
+    return new Response(JSON.stringify({ error: 'SUPABASE_SERVICE_KEY not configured' }), { status: 500, headers: corsHeaders });
+  }
 
   let body;
   try {
@@ -69,6 +76,9 @@ export async function onRequestPost(context) {
   }
 
   return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+  } catch(e) {
+    return new Response(JSON.stringify({ error: 'Function error: ' + e.message }), { status: 500, headers: corsHeaders });
+  }
 }
 
 export async function onRequestOptions() {
