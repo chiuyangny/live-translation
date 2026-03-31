@@ -41,10 +41,14 @@ export async function onRequestPost(context) {
     }
   );
 
-  const inviteData = await inviteRes.json();
+  const inviteText = await inviteRes.text();
+  let inviteData;
+  try { inviteData = JSON.parse(inviteText); } catch(e) {
+    return new Response(JSON.stringify({ error: 'Supabase response: ' + inviteText.substring(0, 200) }), { status: 400, headers: corsHeaders });
+  }
 
   if (!inviteRes.ok) {
-    return new Response(JSON.stringify({ error: inviteData.msg || inviteData.message || 'Invite failed' }), { status: 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: inviteData.msg || inviteData.message || inviteData.error_description || JSON.stringify(inviteData) }), { status: 400, headers: corsHeaders });
   }
 
   const userId = inviteData.id;
