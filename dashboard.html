@@ -214,6 +214,13 @@
           <span style="margin-left:auto;font-size:11px" id="trashChevron">▶</span>
         </div>
         <div class="trash-body" id="trashBody">
+          <div id="trashMultiBar" style="display:none;align-items:center;gap:12px;padding:10px 14px;background:#fdf0f0;border-bottom:1px solid #e8c4c4">
+            <span id="trashSelectedCount" style="font-size:13px;font-weight:500;flex:1;color:#b84c4c"></span>
+            <button class="btn-ghost" onclick="selectAllTrashed()" style="font-size:12px">Select all</button>
+            <button class="btn-ghost" onclick="clearTrashSelection()" style="font-size:12px">Clear</button>
+            <button class="btn-restore" onclick="restoreSelected()" style="font-size:12px">Restore selected</button>
+            <button class="btn-danger" onclick="deleteSelected()" style="font-size:12px">Delete permanently</button>
+          </div>
           <div id="trashList"></div>
         </div>
       </div>
@@ -238,24 +245,6 @@
       </div>
     </div>
 
-    <!-- Team -->
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Team</div>
-          <div class="card-subtitle">Members who can operate translations and review sessions</div>
-        </div>
-      </div>
-      <div class="member-list" id="memberList"><div class="empty-state">No members yet</div></div>
-      <div class="divider"></div>
-      <div style="margin-bottom:10px"><strong style="font-size:14px">Invite a member</strong></div>
-      <div class="error-msg" id="inviteError"></div>
-      <div class="invite-form">
-        <div class="field"><label>Name</label><input type="text" id="inviteName" placeholder="Full name" onkeydown="if(event.key='Enter') inviteMember()" /></div>
-        <div class="field"><label>Email</label><input type="email" id="inviteEmail" placeholder="operator@church.org" onkeydown="if(event.key='Enter') inviteMember()" /></div>
-        <button class="btn-primary" id="inviteBtn" onclick="inviteMember()">Invite</button>
-      </div>
-    </div>
 
   </div>
 
@@ -294,6 +283,7 @@
     var movingSessionId = null;
     var openMenuId     = null;
     var selectedSessions = new Set();
+    var selectedTrashed  = new Set();
     var currentSort    = 'date-desc';
 
     function showToast(msg) {
@@ -458,8 +448,9 @@
     async function createFolder() {
       var name = document.getElementById('newFolderInput').value.trim();
       if (!name) return;
+      if (!currentChurch) { showToast('Still loading — please try again.'); return; }
       var { data, error } = await supa.from('folders').insert({ church_id: currentChurch.id, name: name }).select().single();
-      if (error) { showToast('Could not create folder.'); return; }
+      if (error) { showToast('Could not create folder: ' + error.message); return; }
       allFolders.push(data);
       document.getElementById('newFolderInput').value = '';
       toggleNewFolder();
@@ -499,10 +490,10 @@
       var active  = allSessions.filter(function(s) { return !s.deleted_at; });
       var trashed = allSessions.filter(function(s) { return s.deleted_at; });
 
-      if (!active.length) {
+      var html = '';
+      if (!active.length && !allFolders.length) {
         area.innerHTML = '<div class="empty-state">No sessions yet — sessions appear here after the operator ends them</div>';
       } else {
-        var html = '';
         var ungrouped = getSortedSessions(active.filter(function(s) { return !s.folder_id; }));
         ungrouped.forEach(function(s) { html += renderSessionItem(s, true); });
         allFolders.forEach(function(folder) {
@@ -525,7 +516,7 @@
             '</div>' +
           '</div>';
         });
-        area.innerHTML = html;
+        area.innerHTML = html || '<div class="empty-state">No sessions yet — sessions appear here after the operator ends them</div>';
       }
 
       // Trash
@@ -691,6 +682,74 @@
     }
 
     function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function toggleTrashSelect(id, event) {
+      event.stopPropagation();
+      if (selectedTrashed.has(id)) selectedTrashed.delete(id);
+      else selectedTrashed.add(id);
+      updateTrashMultiBar();
+      var row = document.getElementById('trashrow-' + id);
+      if (row) row.classList.toggle('selected', selectedTrashed.has(id));
+    }
+
+    function updateTrashMultiBar() {
+      var bar = document.getElementById('trashMultiBar');
+      if (!bar) return;
+      var count = selectedTrashed.size;
+      if (count > 0) {
+        bar.style.display = 'flex';
+        document.getElementById('trashSelectedCount').textContent = count + ' item' + (count !== 1 ? 's' : '') + ' selected';
+      } else {
+        bar.style.display = 'none';
+      }
+    }
+
+    function selectAllTrashed() {
+      var trashed = allSessions.filter(function(s) { return s.deleted_at; });
+      trashed.forEach(function(s) { selectedTrashed.add(s.id); });
+      renderSessions();
+      updateTrashMultiBar();
+    }
+
+    function clearTrashSelection() {
+      selectedTrashed.clear();
+      updateTrashMultiBar();
+      renderSessions();
+    }
+
+    async function restoreSelected() {
+      if (!selectedTrashed.size) return;
+      var ids = Array.from(selectedTrashed);
+      var { error } = await supa.from('sessions').update({ deleted_at: null }).in('id', ids);
+      if (error) { showToast('Could not restore sessions.'); return; }
+      ids.forEach(function(id) {
+        var s = allSessions.find(function(x) { return x.id === id; });
+        if (s) s.deleted_at = null;
+      });
+      selectedTrashed.clear();
+      renderSessions();
+      updateTrashMultiBar();
+      showToast(ids.length + ' session' + (ids.length !== 1 ? 's' : '') + ' restored.');
+    }
+
+    async function deleteSelected() {
+      if (!selectedTrashed.size) return;
+      var ids = Array.from(selectedTrashed);
+      if (!confirm('Permanently delete ' + ids.length + ' session' + (ids.length !== 1 ? 's' : '') + ' and all their translations? This cannot be undone.')) return;
+      for (var i = 0; i < ids.length; i++) {
+        var id = ids[i];
+        var s = allSessions.find(function(x) { return x.id === id; });
+        if (s && currentChurch) {
+          try { await fbDb.ref('translations/' + currentChurch.slug + '/' + id).remove(); } catch(e) {}
+        }
+        await supa.from('sessions').delete().eq('id', id);
+      }
+      allSessions = allSessions.filter(function(s) { return !ids.includes(s.id); });
+      selectedTrashed.clear();
+      renderSessions();
+      updateTrashMultiBar();
+      showToast(ids.length + ' session' + (ids.length !== 1 ? 's' : '') + ' permanently deleted.');
+    }
 
     async function handleSignOut() { await supa.auth.signOut(); window.location.href = 'login.html'; }
 
