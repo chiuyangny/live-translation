@@ -29,7 +29,7 @@ export async function onRequestPost(context) {
 
   // 1. Invite user via Supabase admin API
   const inviteRes = await fetch(
-    'https://zhrkwgpjvgessiqmmefn.supabase.co/auth/v1/admin/invite',
+    'https://zhrkwgpjvgessiqmmefn.supabase.co/auth/v1/admin/users',
     {
       method: 'POST',
       headers: {
@@ -37,7 +37,7 @@ export async function onRequestPost(context) {
         'apikey': env.SUPABASE_SERVICE_KEY,
         'Authorization': 'Bearer ' + env.SUPABASE_SERVICE_KEY,
       },
-      body: JSON.stringify({ email, data: { full_name: name } })
+      body: JSON.stringify({ email, data: { full_name: name }, invite: true })
     }
   );
 
