@@ -333,30 +333,6 @@
     }
 
 
-    async function inviteMember() {
-      var name  = document.getElementById('inviteName').value.trim();
-      var email = document.getElementById('inviteEmail').value.trim();
-      var errEl = document.getElementById('inviteError');
-      errEl.style.display = 'none';
-      if (!name || !email) { errEl.textContent = 'Please enter both name and email.'; errEl.style.display = 'block'; return; }
-      var btn = document.getElementById('inviteBtn');
-      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Inviting…';
-      try {
-        var tempPassword = Math.random().toString(36).slice(2) + 'Aa1!';
-        var { data: authData, error: authError } = await supa.auth.signUp({ email, password: tempPassword, options: { data: { full_name: name } } });
-        if (authError) throw authError;
-        var { error: profileError } = await supa.from('profiles').insert({ id: authData.user.id, church_id: currentChurch.id, role: 'member', full_name: name, email });
-        if (profileError) throw profileError;
-        document.getElementById('inviteName').value = '';
-        document.getElementById('inviteEmail').value = '';
-        showToast('Invite sent to ' + email);
-        await loadMembers();
-      } catch(err) {
-        errEl.textContent = err.message || 'Could not invite member.';
-        errEl.style.display = 'block';
-      } finally { btn.disabled = false; btn.textContent = 'Invite'; }
-    }
-
     async function loadMembers() {
       var { data } = await supa.from('profiles').select('*').eq('church_id', currentChurch.id).order('created_at');
       var list = document.getElementById('memberList');
