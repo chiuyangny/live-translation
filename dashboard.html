@@ -73,6 +73,7 @@
     .session-item { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; background: var(--white); border-bottom: 1px solid var(--border); gap: 12px; }
     .session-item:last-child { border-bottom: none; }
     .session-item.ungrouped { border: 1px solid var(--border); border-radius: 3px; }
+    .session-item.selected { background: var(--gold-light) !important; }
     .session-info { flex: 1; cursor: pointer; }
     .session-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; transition: color 0.15s; }
     .session-info:hover .session-title { color: var(--gold); }
@@ -121,7 +122,7 @@
 <body>
 
   <nav class="nav">
-    <div class="nav-brand">✦ <span>SermonLive</span></div>
+    <div class="nav-brand" style="font-family:'DM Sans',sans-serif;font-weight:500;font-size:16px;letter-spacing:0">Live Translation</div>
     <div class="nav-right">
       <span class="nav-user" id="navUser"></span>
       <button class="btn-ghost" onclick="handleSignOut()">Sign out</button>
@@ -166,25 +167,6 @@
       <p style="font-size:12px;color:var(--muted);margin-top:12px;">The operator must be signed in to use this link.</p>
     </div>
 
-    <!-- Team -->
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Team</div>
-          <div class="card-subtitle">Members who can operate translations and review sessions</div>
-        </div>
-      </div>
-      <div class="member-list" id="memberList"><div class="empty-state">No members yet</div></div>
-      <div class="divider"></div>
-      <div style="margin-bottom:10px"><strong style="font-size:14px">Invite a member</strong></div>
-      <div class="error-msg" id="inviteError"></div>
-      <div class="invite-form">
-        <div class="field"><label>Name</label><input type="text" id="inviteName" placeholder="Full name" onkeydown="if(event.key==='Enter') inviteMember()" /></div>
-        <div class="field"><label>Email</label><input type="email" id="inviteEmail" placeholder="operator@church.org" onkeydown="if(event.key==='Enter') inviteMember()" /></div>
-        <button class="btn-primary" id="inviteBtn" onclick="inviteMember()">Invite</button>
-      </div>
-    </div>
-
     <!-- Sessions -->
     <div class="card">
       <div class="card-header">
@@ -192,7 +174,23 @@
           <div class="card-title">Sessions</div>
           <div class="card-subtitle">Past sermon translations, organized by series</div>
         </div>
-        <button class="btn-ghost" onclick="toggleNewFolder()">+ New folder</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="sortSelect" class="btn-ghost" onchange="sortSessions()" style="font-size:12px;padding:6px 10px;cursor:pointer">
+            <option value="date-desc">Date ↓</option>
+            <option value="date-asc">Date ↑</option>
+            <option value="name-asc">Name A→Z</option>
+            <option value="name-desc">Name Z→A</option>
+          </select>
+          <button class="btn-ghost" onclick="toggleNewFolder()">+ New folder</button>
+        </div>
+      </div>
+
+      <!-- Multi-select toolbar (shown when selections exist) -->
+      <div id="multiSelectBar" style="display:none;align-items:center;gap:12px;padding:10px 14px;background:var(--gold-light);border:1px solid #d8c880;border-radius:3px;margin-bottom:12px">
+        <span id="selectedCount" style="font-size:13px;font-weight:500;flex:1"></span>
+        <button class="btn-ghost" onclick="selectAllSessions()" style="font-size:12px">Select all</button>
+        <button class="btn-ghost" onclick="clearSelection()" style="font-size:12px">Clear</button>
+        <button class="btn-danger" onclick="trashSelected()" style="font-size:12px">🗑 Move to trash</button>
       </div>
 
       <div id="newFolderRow" class="new-folder-row" style="display:none">
@@ -216,6 +214,44 @@
         <div class="trash-body" id="trashBody">
           <div id="trashList"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Team -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Team</div>
+          <div class="card-subtitle">Members who can operate translations and review sessions</div>
+        </div>
+      </div>
+      <div class="member-list" id="memberList"><div class="empty-state">No members yet</div></div>
+      <div class="divider"></div>
+      <div style="margin-bottom:10px"><strong style="font-size:14px">Invite a member</strong></div>
+      <div class="error-msg" id="inviteError"></div>
+      <div class="invite-form">
+        <div class="field"><label>Name</label><input type="text" id="inviteName" placeholder="Full name" onkeydown="if(event.key==='Enter') inviteMember()" /></div>
+        <div class="field"><label>Email</label><input type="email" id="inviteEmail" placeholder="operator@church.org" onkeydown="if(event.key==='Enter') inviteMember()" /></div>
+        <button class="btn-primary" id="inviteBtn" onclick="inviteMember()">Invite</button>
+      </div>
+    </div>
+
+    <!-- Team -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Team</div>
+          <div class="card-subtitle">Members who can operate translations and review sessions</div>
+        </div>
+      </div>
+      <div class="member-list" id="memberList"><div class="empty-state">No members yet</div></div>
+      <div class="divider"></div>
+      <div style="margin-bottom:10px"><strong style="font-size:14px">Invite a member</strong></div>
+      <div class="error-msg" id="inviteError"></div>
+      <div class="invite-form">
+        <div class="field"><label>Name</label><input type="text" id="inviteName" placeholder="Full name" onkeydown="if(event.key='Enter') inviteMember()" /></div>
+        <div class="field"><label>Email</label><input type="email" id="inviteEmail" placeholder="operator@church.org" onkeydown="if(event.key='Enter') inviteMember()" /></div>
+        <button class="btn-primary" id="inviteBtn" onclick="inviteMember()">Invite</button>
       </div>
     </div>
 
@@ -255,6 +291,8 @@
     var allFolders     = [];
     var movingSessionId = null;
     var openMenuId     = null;
+    var selectedSessions = new Set();
+    var currentSort    = 'date-desc';
 
     function showToast(msg) {
       var t = document.getElementById('toast');
@@ -302,12 +340,8 @@
       });
     }
 
-    async function loadMembers() {
-      var { data } = await supa.from('profiles').select('*').eq('church_id', currentChurch.id).order('created_at');
-      var list = document.getElementById('memberList');
-      if (!data || !data.length) { list.innerHTML = '<div class="empty-state">No members yet</div>'; return; }
       list.innerHTML = data.map(function(m) {
-        var isOwner = m.id === currentUser.id;
+        var isOwner = m.role === 'owner' || m.id === currentUser.id;
         return '<div class="member-item">' +
           '<div class="member-info">' +
             '<div class="member-name">' + escHtml(m.full_name || '—') + (isOwner ? ' <span style="font-size:11px;color:var(--muted)">(you)</span>' : '') + '</div>' +
@@ -316,6 +350,71 @@
           '<span class="badge ' + (isOwner ? 'owner' : '') + '">' + (isOwner ? 'owner' : 'member') + '</span>' +
         '</div>';
       }).join('');
+    }
+
+      var btn = document.getElementById('inviteBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Inviting…';
+      try {
+        var tempPassword = Math.random().toString(36).slice(2) + 'Aa1!';
+        var { data: authData, error: authError } = await supa.auth.signUp({ email, password: tempPassword, options: { data: { full_name: name } } });
+        if (authError) throw authError;
+        var { error: profileError } = await supa.from('profiles').insert({ id: authData.user.id, church_id: currentChurch.id, role: 'member', full_name: name, email });
+        if (profileError) throw profileError;
+        document.getElementById('inviteName').value = '';
+        document.getElementById('inviteEmail').value = '';
+        showToast('Invite sent to ' + email);
+        await loadMembers();
+      } catch(err) {
+        errEl.textContent = err.message || 'Could not invite member.';
+        errEl.style.display = 'block';
+      } finally { btn.disabled = false; btn.textContent = 'Invite'; }
+    }
+
+    async function loadMembers() {
+      var { data } = await supa.from('profiles').select('*').eq('church_id', currentChurch.id).order('created_at');
+      var list = document.getElementById('memberList');
+      if (!data || !data.length) { list.innerHTML = '<div class="empty-state">No members yet</div>'; return; }
+      list.innerHTML = data.map(function(m) {
+        var isOwner = m.role === 'owner' || m.id === currentUser.id;
+        return '<div class="member-item">' +
+          '<div class="member-info">' +
+            '<div class="member-name">' + escHtml(m.full_name || '—') + (isOwner ? ' <span style="font-size:11px;color:var(--muted)">(you)</span>' : '') + '</div>' +
+            '<div class="member-email">' + escHtml(m.email || '') + '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:10px">' +
+            '<span class="badge ' + (isOwner ? 'owner' : '') + '">' + (isOwner ? 'owner' : 'member') + '</span>' +
+            (!isOwner ? '<button onclick="makeOwner('' + m.id + '', '' + escHtml(m.full_name || m.email || 'this member') + '')" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s" onmouseover="this.style.borderColor='#2a4db5';this.style.color='#2a4db5'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Make owner</button>' : '') +
+            (!isOwner ? '<button onclick="removeMember('' + m.id + '', '' + escHtml(m.full_name || m.email || 'this member') + '')" style="background:none;border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s" onmouseover="this.style.borderColor='#b84c4c';this.style.color='#b84c4c'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Remove</button>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function makeOwner(userId, name) {
+      if (!confirm('Transfer ownership to ' + name + '? They will become the owner and you will become a member.')) return;
+      try {
+        // Set new owner role
+        var { error: e1 } = await supa.from('profiles').update({ role: 'owner' }).eq('id', userId);
+        if (e1) throw e1;
+        // Demote current owner to member
+        var { error: e2 } = await supa.from('profiles').update({ role: 'member' }).eq('id', currentUser.id);
+        if (e2) throw e2;
+        showToast(name + ' is now the owner.');
+        await loadMembers();
+      } catch(err) {
+        showToast('Could not transfer ownership: ' + err.message);
+      }
+    }
+
+    async function removeMember(userId, name) {
+      if (!confirm('Remove ' + name + ' from your church? They will lose access immediately.')) return;
+      // Delete their profile
+      var { error: profileError } = await supa.from('profiles').delete().eq('id', userId);
+      if (profileError) { showToast('Could not remove member.'); return; }
+      // Delete their auth account via admin — not possible from client, so just remove profile
+      // Their login will fail since no profile exists
+      showToast(name + ' has been removed.');
+      await loadMembers();
     }
 
     async function inviteMember() {
@@ -402,10 +501,10 @@
         area.innerHTML = '<div class="empty-state">No sessions yet — sessions appear here after the operator ends them</div>';
       } else {
         var html = '';
-        var ungrouped = active.filter(function(s) { return !s.folder_id; });
+        var ungrouped = getSortedSessions(active.filter(function(s) { return !s.folder_id; }));
         ungrouped.forEach(function(s) { html += renderSessionItem(s, true); });
         allFolders.forEach(function(folder) {
-          var sessions = active.filter(function(s) { return s.folder_id === folder.id; });
+          var sessions = getSortedSessions(active.filter(function(s) { return s.folder_id === folder.id; }));
           html += '<div class="folder-group" id="folder-' + folder.id + '">' +
             '<div class="folder-header" onclick="toggleFolder(\'' + folder.id + '\')">' +
               '<span class="folder-chevron open" id="chevron-' + folder.id + '">▶</span>' +
