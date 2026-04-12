@@ -3,746 +3,387 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard — SermonLive</title>
+  <title>Sign In — Live Sermon Translation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --cream: #faf7f2; --ink: #1a1714; --muted: #7a7168; --gold: #c9a84c; --gold-light: #f5edd6; --error: #b84c4c; --border: #e2ddd5; --white: #ffffff; }
-    body { background: var(--cream); color: var(--ink); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
-    .nav { background: var(--white); border-bottom: 1px solid var(--border); padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
-    .nav-brand { font-family: 'Lora', serif; font-size: 17px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; }
-    .nav-brand span { color: var(--gold); }
-    .nav-right { display: flex; align-items: center; gap: 16px; }
-    .nav-user { font-size: 13px; color: var(--muted); }
-    .btn-ghost { background: none; border: 1px solid var(--border); border-radius: 3px; padding: 7px 14px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--ink); cursor: pointer; transition: border-color 0.15s; }
-    .btn-ghost:hover { border-color: var(--ink); }
-    .main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
-    .page-title { margin-bottom: 32px; }
-    .page-title h1 { font-family: 'Lora', serif; font-size: 28px; font-weight: 600; margin-bottom: 4px; }
-    .page-title p { font-size: 14px; color: var(--muted); }
-    .card { background: var(--white); border: 1px solid var(--border); border-radius: 4px; padding: 28px 32px; margin-bottom: 24px; }
-    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-    .card-title { font-family: 'Lora', serif; font-size: 17px; font-weight: 600; }
-    .card-subtitle { font-size: 13px; color: var(--muted); margin-top: 2px; }
-    .url-box { display: flex; align-items: center; gap: 10px; background: var(--cream); border: 1px solid var(--border); border-radius: 3px; padding: 10px 14px; }
-    .url-box span { flex: 1; font-size: 14px; color: var(--ink); word-break: break-all; }
-    .btn-copy { background: none; border: 1px solid var(--border); border-radius: 3px; padding: 6px 12px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; color: var(--ink); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
-    .btn-copy:hover { border-color: var(--gold); color: var(--gold); }
-    .btn-copy.copied { border-color: #2d6a3f; color: #2d6a3f; }
-    .btn-primary { padding: 9px 18px; background: var(--ink); color: white; border: none; border-radius: 3px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
-    .btn-primary:hover { background: #2e2a26; }
-    .btn-primary:disabled { background: #c4bdb4; cursor: not-allowed; }
-    .btn-danger { padding: 7px 14px; background: #b84c4c; color: white; border: none; border-radius: 3px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
-    .btn-danger:hover { background: #9e3e3e; }
-    .btn-restore { padding: 7px 14px; background: none; border: 1px solid var(--border); color: var(--ink); border-radius: 3px; font-family: 'DM Sans', sans-serif; font-size: 12px; cursor: pointer; transition: border-color 0.15s; }
-    .btn-restore:hover { border-color: var(--ink); }
-    label { display: block; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
-    input[type="text"], input[type="email"] { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 3px; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--ink); background: var(--cream); outline: none; transition: border-color 0.15s, background 0.15s; }
-    input[type="text"]:focus, input[type="email"]:focus { border-color: var(--gold); background: white; }
+
+    :root {
+      --cream: #faf7f2;
+      --ink: #1a1714;
+      --muted: #7a7168;
+      --gold: #c9a84c;
+      --gold-light: #e8d9a8;
+      --error: #b84c4c;
+      --border: #e2ddd5;
+    }
+
+    body {
+      background: var(--cream);
+      color: var(--ink);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+
+
+    .card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      width: 100%;
+      max-width: 440px;
+      padding: 48px 40px;
+      position: relative;
+      box-shadow: 0 2px 24px rgba(26,23,20,0.06);
+      animation: fadeUp 0.5s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+
+
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .header h1 {
+      font-family: 'Lora', serif;
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 300;
+      line-height: 1.5;
+    }
+
+    .field {
+      margin-bottom: 18px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      color: var(--ink);
+      background: var(--cream);
+      transition: border-color 0.15s, background 0.15s;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: var(--gold);
+      background: white;
+    }
+
     input::placeholder { color: #c4bdb4; }
-    .member-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-    .member-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--cream); border: 1px solid var(--border); border-radius: 3px; }
-    .member-info { display: flex; flex-direction: column; gap: 2px; }
-    .member-name { font-size: 14px; font-weight: 500; }
-    .member-email { font-size: 12px; color: var(--muted); }
-    .badge { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; padding: 3px 8px; border-radius: 2px; background: var(--gold-light); color: #7a5c1a; }
-    .badge.owner { background: #e8f0fe; color: #2a4db5; }
-    .invite-form { display: flex; gap: 10px; align-items: flex-end; }
-    .invite-form .field { flex: 1; }
-    .divider { height: 1px; background: var(--border); margin: 20px 0; }
-    .member-action-btn { background: none; border: 1px solid var(--border); border-radius: 3px; padding: 3px 8px; font-size: 11px; color: var(--muted); cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
-    .member-action-btn:hover { opacity: 0.75; }
-    .sessions-area { display: flex; flex-direction: column; gap: 8px; }
-    .folder-group { border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-    .folder-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--cream); cursor: pointer; user-select: none; transition: background 0.15s; }
-    .folder-header:hover { background: #f0ece4; }
-    .folder-chevron { font-size: 10px; color: var(--muted); transition: transform 0.2s; display: inline-block; }
-    .folder-chevron.open { transform: rotate(90deg); }
-    .folder-icon { font-size: 15px; }
-    .folder-name { font-size: 14px; font-weight: 500; flex: 1; }
-    .folder-count { font-size: 12px; color: var(--muted); }
-    .folder-actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
-    .folder-header:hover .folder-actions { opacity: 1; }
-    .folder-action-btn { background: none; border: 1px solid var(--border); border-radius: 3px; padding: 3px 8px; font-size: 11px; color: var(--muted); cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
-    .folder-action-btn:hover { border-color: var(--ink); color: var(--ink); }
-    .folder-action-btn.del:hover { border-color: var(--error); color: var(--error); }
-    .folder-body { display: none; border-top: 1px solid var(--border); }
-    .folder-body.open { display: block; }
-    .session-item { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; background: var(--white); border-bottom: 1px solid var(--border); gap: 12px; }
-    .session-item:last-child { border-bottom: none; }
-    .session-item.ungrouped { border: 1px solid var(--border); border-radius: 3px; }
-    .session-item.selected { background: var(--gold-light) !important; }
-    .session-info { flex: 1; cursor: pointer; }
-    .session-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; transition: color 0.15s; }
-    .session-info:hover .session-title { color: var(--gold); }
-    .session-meta { font-size: 12px; color: var(--muted); }
-    .session-controls { display: flex; align-items: center; gap: 8px; position: relative; }
-    .menu-btn { background: none; border: 1px solid transparent; border-radius: 3px; padding: 4px 8px; font-size: 16px; color: var(--muted); cursor: pointer; line-height: 1; transition: all 0.15s; }
-    .menu-btn:hover { border-color: var(--border); color: var(--ink); }
-    .dropdown { position: absolute; right: 0; top: 100%; background: var(--white); border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 20px rgba(26,23,20,0.1); min-width: 160px; z-index: 50; display: none; overflow: hidden; }
-    .dropdown.open { display: block; }
-    .dropdown-item { display: block; width: 100%; padding: 10px 14px; font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--ink); background: none; border: none; text-align: left; cursor: pointer; transition: background 0.1s; }
-    .dropdown-item:hover { background: var(--cream); }
-    .dropdown-item.danger { color: var(--error); }
-    .dropdown-item.danger:hover { background: #fdf0f0; }
-    .dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
-    .trash-section { margin-top: 8px; }
-    .trash-header { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--cream); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; font-size: 13px; color: var(--muted); user-select: none; transition: color 0.15s; }
-    .trash-header:hover { color: var(--ink); }
-    .trash-body { display: none; border: 1px solid var(--border); border-top: none; border-radius: 0 0 3px 3px; overflow: hidden; }
-    .trash-body.open { display: block; }
-    .trash-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fdf8f4; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
-    .trash-item:last-child { border-bottom: none; }
-    .trash-info { flex: 1; }
-    .trash-title { font-size: 13px; font-weight: 500; color: var(--muted); text-decoration: line-through; }
-    .trash-meta { font-size: 12px; color: #c4bdb4; margin-top: 2px; }
-    .trash-controls { display: flex; gap: 8px; }
-    .new-folder-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
-    .new-folder-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 3px; font-family: 'DM Sans', sans-serif; font-size: 13px; background: var(--cream); outline: none; color: var(--ink); transition: border-color 0.15s; }
-    .new-folder-row input:focus { border-color: var(--gold); background: white; }
-    .modal-overlay { position: fixed; inset: 0; background: rgba(26,23,20,0.4); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 100; }
-    .modal-overlay.open { display: flex; }
-    .modal { background: white; border: 1px solid var(--border); border-radius: 4px; padding: 32px; width: 100%; max-width: 400px; box-shadow: 0 8px 40px rgba(26,23,20,0.12); }
-    .modal h2 { font-family: 'Lora', serif; font-size: 20px; margin-bottom: 16px; }
-    .folder-option { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 3px; margin-bottom: 8px; cursor: pointer; font-size: 14px; transition: all 0.15s; }
-    .folder-option:hover { border-color: var(--gold); background: var(--gold-light); }
-    .modal-cancel { margin-top: 8px; width: 100%; padding: 10px; background: none; border: 1px solid var(--border); border-radius: 3px; font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer; transition: border-color 0.15s; }
-    .modal-cancel:hover { border-color: var(--ink); }
-    .empty-state { text-align: center; padding: 24px; color: var(--muted); font-size: 14px; background: var(--cream); border: 1px dashed var(--border); border-radius: 3px; }
-    .loading { text-align: center; padding: 60px; color: var(--muted); font-size: 14px; }
-    .error-msg { background: #fdf0f0; border: 1px solid #e8c4c4; border-radius: 3px; padding: 10px 14px; font-size: 13px; color: var(--error); margin-bottom: 16px; display: none; }
-    .toast { position: fixed; bottom: 24px; right: 24px; background: var(--ink); color: white; padding: 12px 20px; border-radius: 4px; font-size: 13px; font-weight: 500; opacity: 0; transform: translateY(8px); transition: all 0.2s; pointer-events: none; z-index: 200; }
-    .toast.show { opacity: 1; transform: translateY(0); }
-    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 8px; vertical-align: middle; }
+
+    .forgot-link {
+      text-align: right;
+      margin-top: 6px;
+    }
+
+    .forgot-link a {
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 13px;
+      background: var(--ink);
+      color: white;
+      border: none;
+      border-radius: 3px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.15s, transform 0.1s;
+      letter-spacing: 0.02em;
+    }
+
+    .btn:hover { background: #2e2a26; }
+    .btn:active { transform: scale(0.99); }
+    .btn:disabled { background: #c4bdb4; cursor: not-allowed; transform: none; }
+
+    .error-msg {
+      background: #fdf0f0;
+      border: 1px solid #e8c4c4;
+      border-radius: 3px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--error);
+      margin-bottom: 18px;
+      display: none;
+    }
+
+    .success-msg {
+      background: #f0fdf4;
+      border: 1px solid #a7d8b0;
+      border-radius: 3px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #2d6a3f;
+      margin-bottom: 18px;
+      display: none;
+    }
+
+    .footer-link {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .footer-link a {
+      color: var(--ink);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Reset password modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(26,23,20,0.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 100;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 8px 40px rgba(26,23,20,0.12);
+    }
+
+    .modal h2 {
+      font-family: 'Lora', serif;
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+
+    .modal p {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .btn-outline {
+      flex: 1;
+      padding: 11px;
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+
+    .btn-outline:hover { border-color: var(--ink); }
+
+    .btn-sm {
+      flex: 1;
+      padding: 11px;
+      background: var(--ink);
+      color: white;
+      border: none;
+      border-radius: 3px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-sm:hover { background: #2e2a26; }
+    .btn-sm:disabled { background: #c4bdb4; cursor: not-allowed; }
   </style>
 </head>
 <body>
-
-  <nav class="nav">
-    <div class="nav-brand" style="font-family:'DM Sans',sans-serif;font-weight:500;font-size:16px;letter-spacing:0">Live Translation</div>
-    <div class="nav-right">
-      <span class="nav-user" id="navUser"></span>
-      <button class="btn-ghost" onclick="handleSignOut()">Sign out</button>
-    </div>
-  </nav>
-
-  <div id="loadingState" class="loading">Loading your dashboard…</div>
-
-  <div class="main" id="mainContent" style="display:none">
-
-    <div class="page-title">
-      <h1 id="churchTitle">Your Church</h1>
-      <p>Manage your live translation sessions and team.</p>
+  <div class="card">
+    <div class="header">
+      <h1>Welcome back</h1>
+      <p>Sign in to manage your church's live translation.</p>
     </div>
 
-    <!-- Viewer URL -->
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Congregation viewer link</div>
-          <div class="card-subtitle">Share this with your congregation — no login required</div>
-        </div>
-      </div>
-      <div class="url-box">
-        <span id="viewerUrl"></span>
-        <button class="btn-copy" id="copyViewerBtn" onclick="copyUrl('viewerUrl','copyViewerBtn')">Copy</button>
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="success-msg" id="successMsg"></div>
+
+    <div class="field">
+      <label for="email">Email address</label>
+      <input type="email" id="email" placeholder="you@church.org" autocomplete="email" />
+    </div>
+
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Your password" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter') handleLogin()" />
+      <div class="forgot-link">
+        <a href="#" onclick="openReset(event)">Forgot password?</a>
       </div>
     </div>
 
-    <!-- Operator URL -->
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Operator view</div>
-          <div class="card-subtitle">Open on the operator's computer — they control the session</div>
-        </div>
-      </div>
-      <div class="url-box">
-        <span id="operatorUrl"></span>
-        <button class="btn-copy" id="copyOperatorBtn" onclick="copyUrl('operatorUrl','copyOperatorBtn')">Copy</button>
-      </div>
-      <p style="font-size:12px;color:var(--muted);margin-top:12px;">The operator must be signed in to use this link.</p>
+    <button class="btn" id="submitBtn" onclick="handleLogin()">Sign in</button>
+
+    <div class="footer-link">
+      New here? <a href="signup.html">Register your church</a>
     </div>
-
-    <!-- Sessions -->
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Sessions</div>
-          <div class="card-subtitle">Past sermon translations, organized by series</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="sortSelect" class="btn-ghost" onchange="sortSessions()" style="font-size:12px;padding:6px 10px;cursor:pointer">
-            <option value="date-desc">Date ↓</option>
-            <option value="date-asc">Date ↑</option>
-            <option value="name-asc">Name A→Z</option>
-            <option value="name-desc">Name Z→A</option>
-          </select>
-          <button class="btn-ghost" onclick="toggleNewFolder()">+ New folder</button>
-        </div>
-      </div>
-
-      <!-- Multi-select toolbar (shown when selections exist) -->
-      <div id="multiSelectBar" style="display:none;align-items:center;gap:12px;padding:10px 14px;background:var(--gold-light);border:1px solid #d8c880;border-radius:3px;margin-bottom:12px">
-        <span id="selectedCount" style="font-size:13px;font-weight:500;flex:1"></span>
-        <button class="btn-ghost" onclick="selectAllSessions()" style="font-size:12px">Select all</button>
-        <button class="btn-ghost" onclick="clearSelection()" style="font-size:12px">Clear</button>
-        <button class="btn-danger" onclick="trashSelected()" style="font-size:12px">🗑 Move to trash</button>
-      </div>
-
-      <div id="newFolderRow" class="new-folder-row" style="display:none">
-        <input type="text" id="newFolderInput" placeholder="Folder name (e.g. Genesis Series, 2025)"
-          onkeydown="if(event.key==='Enter') createFolder(); if(event.key==='Escape') toggleNewFolder()" />
-        <button class="btn-primary" onclick="createFolder()">Create</button>
-        <button class="btn-ghost" onclick="toggleNewFolder()">Cancel</button>
-      </div>
-
-      <div class="sessions-area" id="sessionsArea">
-        <div class="empty-state">No sessions yet</div>
-      </div>
-
-      <div class="trash-section" id="trashSection" style="display:none">
-        <div class="trash-header" onclick="toggleTrash()">
-          <span>🗑</span>
-          <span>Trash</span>
-          <span id="trashCount" style="margin-left:4px"></span>
-          <span style="margin-left:auto;font-size:11px" id="trashChevron">▶</span>
-        </div>
-        <div class="trash-body" id="trashBody">
-          <div id="trashMultiBar" style="display:none;align-items:center;gap:12px;padding:10px 14px;background:#fdf0f0;border-bottom:1px solid #e8c4c4">
-            <span id="trashSelectedCount" style="font-size:13px;font-weight:500;flex:1;color:#b84c4c"></span>
-            <button class="btn-ghost" onclick="selectAllTrashed()" style="font-size:12px">Select all</button>
-            <button class="btn-ghost" onclick="clearTrashSelection()" style="font-size:12px">Clear</button>
-            <button class="btn-restore" onclick="restoreSelected()" style="font-size:12px">Restore selected</button>
-            <button class="btn-danger" onclick="deleteSelected()" style="font-size:12px">Delete permanently</button>
-          </div>
-          <div id="trashList"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Team -->
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Team</div>
-          <div class="card-subtitle">Members who can operate translations and review sessions</div>
-        </div>
-      </div>
-      <div class="member-list" id="memberList"><div class="empty-state">No members yet</div></div>
-      <div class="divider"></div>
-      <div style="margin-bottom:10px"><strong style="font-size:14px">Invite a member</strong></div>
-      <div class="error-msg" id="inviteError"></div>
-      <div class="invite-form">
-        <div class="field"><label>Name</label><input type="text" id="inviteName" placeholder="Full name" onkeydown="if(event.key==='Enter') inviteMember()" /></div>
-        <div class="field"><label>Email</label><input type="email" id="inviteEmail" placeholder="operator@church.org" onkeydown="if(event.key==='Enter') inviteMember()" /></div>
-        <button class="btn-primary" id="inviteBtn" onclick="inviteMember()">Invite</button>
-      </div>
-    </div>
-
-
   </div>
 
-  <!-- Move to folder modal -->
-  <div class="modal-overlay" id="moveModal">
+  <!-- Reset password modal -->
+  <div class="modal-overlay" id="resetModal">
     <div class="modal">
-      <h2>Move to folder</h2>
-      <div id="folderOptions"></div>
-      <button class="modal-cancel" onclick="closeMoveModal()">Cancel</button>
+      <h2>Reset password</h2>
+      <p>Enter your email and we'll send you a link to reset your password.</p>
+      <div class="field">
+        <label for="resetEmail">Email address</label>
+        <input type="email" id="resetEmail" placeholder="you@church.org" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn-outline" onclick="closeReset()">Cancel</button>
+        <button class="btn-sm" id="resetBtn" onclick="handleReset()">Send link</button>
+      </div>
     </div>
   </div>
-
-  <div class="toast" id="toast"></div>
 
   <script>
-    var SUPABASE_URL      = 'https://zhrkwgpjvgessiqmmefn.supabase.co';
-    var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpocmt3Z3Bqdmdlc3NpcW1tZWZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4OTUzMjksImV4cCI6MjA5MDQ3MTMyOX0.JoDcJXtL5il1sprbdf2M3XyyyN7BtdwmwY3hP3BrQ8Q';
-    var supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const SUPABASE_URL = 'https://zhrkwgpjvgessiqmmefn.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpocmt3Z3Bqdmdlc3NpcW1tZWZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4OTUzMjksImV4cCI6MjA5MDQ3MTMyOX0.JoDcJXtL5il1sprbdf2M3XyyyN7BtdwmwY3hP3BrQ8Q';
+    const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    var firebaseConfig = {
-      apiKey: "AIzaSyCqzFwELPmWwDWrbTILL1L-opT0xlKMOPs",
-      authDomain: "live-translation-fd583.firebaseapp.com",
-      databaseURL: "https://live-translation-fd583-default-rtdb.firebaseio.com",
-      projectId: "live-translation-fd583",
-      storageBucket: "live-translation-fd583.firebasestorage.app",
-      messagingSenderId: "189364035896",
-      appId: "1:189364035896:web:552700e29449859089a1cd"
-    };
-    firebase.initializeApp(firebaseConfig);
-    var fbDb = firebase.database();
-
-    var currentUser    = null;
-    var currentChurch  = null;
-    var allSessions    = [];
-    var allFolders     = [];
-    var movingSessionId = null;
-    var openMenuId     = null;
-    var selectedSessions = new Set();
-    var selectedTrashed  = new Set();
-    var currentSort    = 'date-desc';
-
-    function showToast(msg) {
-      var t = document.getElementById('toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      setTimeout(function() { t.classList.remove('show'); }, 3000);
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('successMsg').style.display = 'none';
     }
 
-    async function init() {
-      var { data: { user } } = await supa.auth.getUser();
-      if (!user) return window.location.href = 'login.html';
-      currentUser = user;
-      document.getElementById('navUser').textContent = user.email;
-
-      var { data: profile } = await supa
-        .from('profiles')
-        .select('*, churches(*)')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile) return window.location.href = 'login.html';
-      currentChurch = profile.churches;
-
-      document.getElementById('churchTitle').textContent = currentChurch.name;
-      document.title = currentChurch.name + ' — Dashboard';
-
-      var base = window.location.origin;
-      document.getElementById('viewerUrl').textContent   = base + '/app/?church=' + currentChurch.slug;
-      document.getElementById('operatorUrl').textContent = base + '/app/?church=' + currentChurch.slug + '&operator';
-
-      document.getElementById('loadingState').style.display = 'none';
-      document.getElementById('mainContent').style.display  = 'block';
-
-      await Promise.all([loadMembers(), loadFolders(), loadSessions()]);
-      renderSessions();
+    function showSuccess(msg) {
+      const el = document.getElementById('successMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('errorMsg').style.display = 'none';
     }
 
-    function copyUrl(spanId, btnId) {
-      var url = document.getElementById(spanId).textContent;
-      navigator.clipboard.writeText(url).then(function() {
-        var btn = document.getElementById(btnId);
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-      });
-    }
+    async function handleLogin() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
 
+      if (!email || !password) return showError('Please enter your email and password.');
 
-    async function loadMembers() {
-      var { data } = await supa.from('profiles').select('*').eq('church_id', currentChurch.id).order('created_at');
-      var list = document.getElementById('memberList');
-      if (!data || !data.length) { list.innerHTML = '<div class="empty-state">No members yet</div>'; return; }
-      list.innerHTML = data.map(function(m) {
-        var isOwner = m.role === 'owner' || m.id === currentUser.id;
-        var name = escHtml(m.full_name || m.email || 'Member');
-        var controls = '';
-        if (!isOwner) {
-          controls += '<button class="member-action-btn" style="color:#2a4db5;border-color:#c8d8f8" onclick="makeOwner(\'' + m.id + '\', \'' + name + '\')">Make owner</button>';
-          controls += '<button class="member-action-btn" style="color:#b84c4c;border-color:#f0c8c8" onclick="removeMember(\'' + m.id + '\', \'' + name + '\')">Remove</button>';
-        }
-        return '<div class="member-item">' +
-          '<div class="member-info">' +
-            '<div class="member-name">' + escHtml(m.full_name || '—') + (isOwner ? ' <span style="font-size:11px;color:var(--muted)">(you)</span>' : '') + '</div>' +
-            '<div class="member-email">' + escHtml(m.email || '') + '</div>' +
-          '</div>' +
-          '<div style="display:flex;align-items:center;gap:8px">' +
-            '<span class="badge ' + (isOwner ? 'owner' : '') + '">' + (isOwner ? 'owner' : 'member') + '</span>' +
-            controls +
-          '</div>' +
-        '</div>';
-      }).join('');
-    }
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Signing in…';
+      document.getElementById('errorMsg').style.display = 'none';
 
-    async function makeOwner(userId, name) {
-      if (!confirm('Transfer ownership to ' + name + '? They will become the owner and you will become a member.')) return;
       try {
-        // Set new owner role
-        var { error: e1 } = await supa.from('profiles').update({ role: 'owner' }).eq('id', userId);
-        if (e1) throw e1;
-        // Demote current owner to member
-        var { error: e2 } = await supa.from('profiles').update({ role: 'member' }).eq('id', currentUser.id);
-        if (e2) throw e2;
-        showToast(name + ' is now the owner.');
-        await loadMembers();
-      } catch(err) {
-        showToast('Could not transfer ownership: ' + err.message);
+        const { data, error } = await supa.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        showError(err.message || 'Invalid email or password.');
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
       }
     }
 
-    async function removeMember(userId, name) {
-      if (!confirm('Remove ' + name + ' from your church? They will lose access immediately.')) return;
-      // Delete their profile
-      var { error: profileError } = await supa.from('profiles').delete().eq('id', userId);
-      if (profileError) { showToast('Could not remove member.'); return; }
-      // Delete their auth account via admin — not possible from client, so just remove profile
-      // Their login will fail since no profile exists
-      showToast(name + ' has been removed.');
-      await loadMembers();
+    function openReset(e) {
+      e.preventDefault();
+      document.getElementById('resetEmail').value = document.getElementById('email').value;
+      document.getElementById('resetModal').classList.add('open');
     }
 
-    async function inviteMember() {
-      var name  = document.getElementById('inviteName').value.trim();
-      var email = document.getElementById('inviteEmail').value.trim();
-      var errEl = document.getElementById('inviteError');
-      errEl.style.display = 'none';
-      if (!name || !email) { errEl.textContent = 'Please enter both name and email.'; errEl.style.display = 'block'; return; }
-      var btn = document.getElementById('inviteBtn');
-      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Inviting…';
+    function closeReset() {
+      document.getElementById('resetModal').classList.remove('open');
+    }
+
+    async function handleReset() {
+      const email = document.getElementById('resetEmail').value.trim();
+      if (!email) return;
+
+      const btn = document.getElementById('resetBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+
       try {
-        var res = await fetch('/invite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email, name: name, church_id: currentChurch.id, church_name: currentChurch.name })
+        const { error } = await supa.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/dashboard.html'
         });
-        var data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Invite failed');
-        document.getElementById('inviteName').value = '';
-        document.getElementById('inviteEmail').value = '';
-        showToast('Invite email sent to ' + email);
-        await loadMembers();
-      } catch(err) {
-        errEl.textContent = err.message || 'Could not invite member.';
-        errEl.style.display = 'block';
-      } finally { btn.disabled = false; btn.textContent = 'Invite'; }
-    }
-
-    async function loadFolders() {
-      var { data } = await supa.from('folders').select('*').eq('church_id', currentChurch.id).order('created_at');
-      allFolders = data || [];
-    }
-
-    function toggleNewFolder() {
-      var row = document.getElementById('newFolderRow');
-      var visible = row.style.display !== 'none';
-      row.style.display = visible ? 'none' : 'flex';
-      if (!visible) setTimeout(function() { document.getElementById('newFolderInput').focus(); }, 50);
-    }
-
-    async function createFolder() {
-      var name = document.getElementById('newFolderInput').value.trim();
-      if (!name) return;
-      if (!currentChurch) { showToast('Still loading — please try again.'); return; }
-      var { data, error } = await supa.from('folders').insert({ church_id: currentChurch.id, name: name }).select().single();
-      if (error) { showToast('Could not create folder: ' + error.message); return; }
-      allFolders.push(data);
-      document.getElementById('newFolderInput').value = '';
-      toggleNewFolder();
-      renderSessions();
-      showToast('Folder created.');
-    }
-
-    async function renameFolder(folderId) {
-      var folder = allFolders.find(function(f) { return f.id === folderId; });
-      if (!folder) return;
-      var newName = prompt('Rename folder:', folder.name);
-      if (!newName || newName === folder.name) return;
-      var { error } = await supa.from('folders').update({ name: newName }).eq('id', folderId);
-      if (error) { showToast('Could not rename folder.'); return; }
-      folder.name = newName;
-      renderSessions();
-      showToast('Folder renamed.');
-    }
-
-    async function deleteFolder(folderId) {
-      if (!confirm('Delete this folder? Sessions inside will become ungrouped.')) return;
-      var { error } = await supa.from('folders').delete().eq('id', folderId);
-      if (error) { showToast('Could not delete folder.'); return; }
-      allFolders = allFolders.filter(function(f) { return f.id !== folderId; });
-      allSessions.forEach(function(s) { if (s.folder_id === folderId) s.folder_id = null; });
-      renderSessions();
-      showToast('Folder deleted.');
-    }
-
-    async function loadSessions() {
-      var { data } = await supa.from('sessions').select('*').eq('church_id', currentChurch.id).not('ended_at', 'is', null).order('started_at', { ascending: false });
-      allSessions = data || [];
-    }
-
-    function getSortedSessions(sessions) {
-      var sorted = sessions.slice();
-      var sort = document.getElementById('sortSelect') ? document.getElementById('sortSelect').value : 'date-desc';
-      if (sort === 'date-desc') sorted.sort(function(a,b) { return new Date(b.started_at) - new Date(a.started_at); });
-      else if (sort === 'date-asc') sorted.sort(function(a,b) { return new Date(a.started_at) - new Date(b.started_at); });
-      else if (sort === 'name-asc') sorted.sort(function(a,b) { return (a.title||'').localeCompare(b.title||''); });
-      else if (sort === 'name-desc') sorted.sort(function(a,b) { return (b.title||'').localeCompare(a.title||''); });
-      return sorted;
-    }
-
-    function renderSessions() {
-      var area    = document.getElementById('sessionsArea');
-      var active  = allSessions.filter(function(s) { return !s.deleted_at; });
-      var trashed = allSessions.filter(function(s) { return s.deleted_at; });
-
-      // Active sessions + folders
-      var html = '';
-      var ungrouped = getSortedSessions(active.filter(function(s) { return !s.folder_id; }));
-      ungrouped.forEach(function(s) { html += renderSessionItem(s, true); });
-
-      allFolders.forEach(function(folder) {
-        var fid = folder.id;
-        var sessions = getSortedSessions(active.filter(function(s) { return s.folder_id === fid; }));
-        var folderSessions = sessions.length
-          ? sessions.map(function(s) { return renderSessionItem(s, false); }).join('')
-          : '<div style="padding:16px;font-size:13px;color:var(--muted)">No sessions in this folder</div>';
-        html += '<div class="folder-group" id="folder-' + fid + '">'
-          + '<div class="folder-header" onclick="toggleFolder(\'' + fid + '\')">'
-            + '<span class="folder-chevron open" id="chevron-' + fid + '">&#9656;</span>'
-            + '<span class="folder-icon">&#128193;</span>'
-            + '<span class="folder-name">' + escHtml(folder.name) + '</span>'
-            + '<span class="folder-count">' + sessions.length + ' session' + (sessions.length !== 1 ? 's' : '') + '</span>'
-            + '<div class="folder-actions" onclick="event.stopPropagation()">'
-              + '<button class="folder-action-btn" onclick="renameFolder(\'' + fid + '\')">Rename</button>'
-              + '<button class="folder-action-btn del" onclick="deleteFolder(\'' + fid + '\')">Delete</button>'
-            + '</div>'
-          + '</div>'
-          + '<div class="folder-body open" id="folderbody-' + fid + '">' + folderSessions + '</div>'
-        + '</div>';
-      });
-
-      area.innerHTML = html || '<div class="empty-state">No sessions yet — sessions appear here after the operator ends them</div>';
-
-      // Trash
-      var trashSection = document.getElementById('trashSection');
-      if (trashed.length) {
-        trashSection.style.display = 'block';
-        document.getElementById('trashCount').textContent = '(' + trashed.length + ')';
-        document.getElementById('trashList').innerHTML = trashed.map(function(s) {
-          var checked = selectedTrashed.has(s.id);
-          return '<div class="trash-item' + (checked ? ' selected' : '') + '" id="trashrow-' + s.id + '">'
-            + '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onclick="toggleTrashSelect(\'' + s.id + '\', event)" style="margin-right:10px;cursor:pointer;width:15px;height:15px;flex-shrink:0;accent-color:#b84c4c" />'
-            + '<div class="trash-info">'
-              + '<div class="trash-title">' + escHtml(s.title || 'Untitled') + '</div>'
-              + '<div class="trash-meta">Deleted ' + timeAgo(new Date(s.deleted_at)) + '</div>'
-            + '</div>'
-            + '<div class="trash-controls">'
-              + '<button class="btn-restore" onclick="restoreSession(\'' + s.id + '\')">Restore</button>'
-              + '<button class="btn-danger" onclick="permanentDelete(\'' + s.id + '\')">Delete permanently</button>'
-            + '</div>'
-          + '</div>';
-        }).join('');
-      } else {
-        trashSection.style.display = 'none';
+        if (error) throw error;
+        closeReset();
+        showSuccess('Password reset link sent — check your email.');
+      } catch (err) {
+        showError(err.message || 'Could not send reset email.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send link';
       }
     }
-
-    function renderSessionItem(s, ungrouped) {
-      var date = new Date(s.started_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-      var dur  = s.ended_at ? formatDuration(new Date(s.started_at), new Date(s.ended_at)) : '';
-      return '<div class="session-item' + (ungrouped ? ' ungrouped' : '') + '" id="session-' + s.id + '">' +
-        '<div class="session-info" onclick="viewSession(\'' + s.id + '\')">' +
-          '<div class="session-title">' + escHtml(s.title || 'Untitled session') + '</div>' +
-          '<div class="session-meta">' + date + (dur ? ' · ' + dur : '') + '</div>' +
-        '</div>' +
-        '<div class="session-controls">' +
-          '<button class="menu-btn" onclick="toggleMenu(\'' + s.id + '\', event)">⋯</button>' +
-          '<div class="dropdown" id="menu-' + s.id + '">' +
-            '<button class="dropdown-item" onclick="viewSession(\'' + s.id + '\')">📄 View review</button>' +
-            '<button class="dropdown-item" onclick="openMoveModal(\'' + s.id + '\')">📁 Move to folder</button>' +
-            '<div class="dropdown-divider"></div>' +
-            '<button class="dropdown-item danger" onclick="trashSession(\'' + s.id + '\')">🗑 Move to trash</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    }
-
-    function toggleFolder(folderId) {
-      var body    = document.getElementById('folderbody-' + folderId);
-      var chevron = document.getElementById('chevron-' + folderId);
-      var open    = body.classList.toggle('open');
-      chevron.classList.toggle('open', open);
-    }
-
-    function toggleTrash() {
-      var body    = document.getElementById('trashBody');
-      var chevron = document.getElementById('trashChevron');
-      var open    = body.classList.toggle('open');
-      chevron.textContent = open ? '▼' : '▶';
-    }
-
-    function toggleMenu(sessionId, event) {
-      event.stopPropagation();
-      if (openMenuId && openMenuId !== sessionId) {
-        var old = document.getElementById('menu-' + openMenuId);
-        if (old) old.classList.remove('open');
-      }
-      var menu = document.getElementById('menu-' + sessionId);
-      menu.classList.toggle('open');
-      openMenuId = menu.classList.contains('open') ? sessionId : null;
-    }
-
-    document.addEventListener('click', function() {
-      if (openMenuId) {
-        var menu = document.getElementById('menu-' + openMenuId);
-        if (menu) menu.classList.remove('open');
-        openMenuId = null;
-      }
-    });
-
-    function viewSession(id) {
-      window.location.href = 'review.html?church=' + currentChurch.slug + '&session=' + id;
-    }
-
-    async function trashSession(id) {
-      closeMenus();
-      var { error } = await supa.from('sessions').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-      if (error) { showToast('Could not move to trash.'); return; }
-      var s = allSessions.find(function(x) { return x.id === id; });
-      if (s) s.deleted_at = new Date().toISOString();
-      renderSessions();
-      showToast('Moved to trash.');
-    }
-
-    async function restoreSession(id) {
-      var { error } = await supa.from('sessions').update({ deleted_at: null }).eq('id', id);
-      if (error) { showToast('Could not restore session.'); return; }
-      var s = allSessions.find(function(x) { return x.id === id; });
-      if (s) s.deleted_at = null;
-      renderSessions();
-      showToast('Session restored.');
-    }
-
-    async function permanentDelete(id) {
-      if (!confirm('Permanently delete this session and all its translations? This cannot be undone.')) return;
-      var s = allSessions.find(function(x) { return x.id === id; });
-      // Delete from Firebase
-      if (s && currentChurch) {
-        try { await fbDb.ref('translations/' + currentChurch.slug + '/' + id).remove(); } catch(e) {}
-      }
-      // Delete from Supabase
-      var { error } = await supa.from('sessions').delete().eq('id', id);
-      if (error) { showToast('Could not delete session.'); return; }
-      allSessions = allSessions.filter(function(x) { return x.id !== id; });
-      renderSessions();
-      showToast('Session permanently deleted.');
-    }
-
-    function openMoveModal(sessionId) {
-      closeMenus();
-      movingSessionId = sessionId;
-      var html = '<div class="folder-option" onclick="moveToFolder(null)">📂 No folder (ungrouped)</div>';
-      allFolders.forEach(function(f) {
-        html += '<div class="folder-option" onclick="moveToFolder(\'' + f.id + '\')">📁 ' + escHtml(f.name) + '</div>';
-      });
-      if (!allFolders.length) html += '<p style="font-size:13px;color:var(--muted);margin-bottom:8px">No folders yet. Create one from the Sessions card.</p>';
-      document.getElementById('folderOptions').innerHTML = html;
-      document.getElementById('moveModal').classList.add('open');
-    }
-
-    function closeMoveModal() {
-      document.getElementById('moveModal').classList.remove('open');
-      movingSessionId = null;
-    }
-
-    async function moveToFolder(folderId) {
-      closeMoveModal();
-      if (!movingSessionId) return;
-      var { error } = await supa.from('sessions').update({ folder_id: folderId }).eq('id', movingSessionId);
-      if (error) { showToast('Could not move session.'); return; }
-      var s = allSessions.find(function(x) { return x.id === movingSessionId; });
-      if (s) s.folder_id = folderId;
-      renderSessions();
-      showToast(folderId ? 'Session moved to folder.' : 'Session ungrouped.');
-    }
-
-    function closeMenus() {
-      if (openMenuId) {
-        var menu = document.getElementById('menu-' + openMenuId);
-        if (menu) menu.classList.remove('open');
-        openMenuId = null;
-      }
-    }
-
-    function formatDuration(start, end) {
-      var mins = Math.round((end - start) / 60000);
-      if (mins < 60) return mins + 'm';
-      return Math.floor(mins/60) + 'h ' + (mins % 60) + 'm';
-    }
-
-    function timeAgo(date) {
-      var mins = Math.round((Date.now() - date) / 60000);
-      if (mins < 60) return mins + 'm ago';
-      if (mins < 1440) return Math.floor(mins/60) + 'h ago';
-      return Math.floor(mins/1440) + 'd ago';
-    }
-
-    function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-    function toggleTrashSelect(id, event) {
-      event.stopPropagation();
-      if (selectedTrashed.has(id)) selectedTrashed.delete(id);
-      else selectedTrashed.add(id);
-      updateTrashMultiBar();
-      var row = document.getElementById('trashrow-' + id);
-      if (row) row.classList.toggle('selected', selectedTrashed.has(id));
-    }
-
-    function updateTrashMultiBar() {
-      var bar = document.getElementById('trashMultiBar');
-      if (!bar) return;
-      var count = selectedTrashed.size;
-      if (count > 0) {
-        bar.style.display = 'flex';
-        document.getElementById('trashSelectedCount').textContent = count + ' item' + (count !== 1 ? 's' : '') + ' selected';
-      } else {
-        bar.style.display = 'none';
-      }
-    }
-
-    function selectAllTrashed() {
-      var trashed = allSessions.filter(function(s) { return s.deleted_at; });
-      trashed.forEach(function(s) { selectedTrashed.add(s.id); });
-      renderSessions();
-      updateTrashMultiBar();
-    }
-
-    function clearTrashSelection() {
-      selectedTrashed.clear();
-      updateTrashMultiBar();
-      renderSessions();
-    }
-
-    async function restoreSelected() {
-      if (!selectedTrashed.size) return;
-      var ids = Array.from(selectedTrashed);
-      var { error } = await supa.from('sessions').update({ deleted_at: null }).in('id', ids);
-      if (error) { showToast('Could not restore sessions.'); return; }
-      ids.forEach(function(id) {
-        var s = allSessions.find(function(x) { return x.id === id; });
-        if (s) s.deleted_at = null;
-      });
-      selectedTrashed.clear();
-      renderSessions();
-      updateTrashMultiBar();
-      showToast(ids.length + ' session' + (ids.length !== 1 ? 's' : '') + ' restored.');
-    }
-
-    async function deleteSelected() {
-      if (!selectedTrashed.size) return;
-      var ids = Array.from(selectedTrashed);
-      if (!confirm('Permanently delete ' + ids.length + ' session' + (ids.length !== 1 ? 's' : '') + ' and all their translations? This cannot be undone.')) return;
-      for (var i = 0; i < ids.length; i++) {
-        var id = ids[i];
-        var s = allSessions.find(function(x) { return x.id === id; });
-        if (s && currentChurch) {
-          try { await fbDb.ref('translations/' + currentChurch.slug + '/' + id).remove(); } catch(e) {}
-        }
-        await supa.from('sessions').delete().eq('id', id);
-      }
-      allSessions = allSessions.filter(function(s) { return !ids.includes(s.id); });
-      selectedTrashed.clear();
-      renderSessions();
-      updateTrashMultiBar();
-      showToast(ids.length + ' session' + (ids.length !== 1 ? 's' : '') + ' permanently deleted.');
-    }
-
-    async function handleSignOut() { await supa.auth.signOut(); window.location.href = 'login.html'; }
-
-    init();
   </script>
 </body>
 </html>
