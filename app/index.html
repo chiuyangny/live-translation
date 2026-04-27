@@ -469,9 +469,9 @@ var transcriptPanelOpen = false;
 function toggleTranscriptPanel() {
   transcriptPanelOpen = !transcriptPanelOpen;
   $('transcript-panel').classList.toggle('open', transcriptPanelOpen);
-  $('transcriptBtn').style.background = transcriptPanelOpen ? '#2a4a2a' : 'transparent';
-  $('transcriptBtn').style.color = transcriptPanelOpen ? '#2ecc71' : '#555';
-  $('transcriptBtn').style.borderColor = transcriptPanelOpen ? '#2a5c3a' : '#222';
+  $('transcriptBtn').style.background = transcriptPanelOpen ? '#2a4a2a' : '';
+  $('transcriptBtn').style.color = transcriptPanelOpen ? '#2ecc71' : '';
+  $('transcriptBtn').style.borderColor = transcriptPanelOpen ? '#2a5c3a' : '';
 }
 
 function addTranscriptEntry(koText, enText) {
